@@ -3,6 +3,9 @@ import { pathToFileURL } from 'node:url';
 import { accountsRouter } from './routes/accounts.js';
 import { categoriesRouter } from './routes/categories.js';
 import { transactionsRouter } from './routes/transactions.js';
+import { summaryRouter } from './routes/summary.js';
+import { cashflowRouter } from './routes/cashflow.js';
+import { investmentsRouter, networthRouter } from './routes/investments.js';
 
 const app = express();
 app.use(express.json());
@@ -14,6 +17,10 @@ app.get('/api/health', (req, res) => {
 app.use('/api/accounts', accountsRouter);
 app.use('/api/categories', categoriesRouter);
 app.use('/api/transactions', transactionsRouter);
+app.use('/api/summary', summaryRouter);
+app.use('/api/cashflow', cashflowRouter);
+app.use('/api/investments', investmentsRouter);
+app.use('/api/networth', networthRouter);
 
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {

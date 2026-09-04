@@ -7,6 +7,7 @@ import {
   requireIntCents,
   requireId,
 } from '../validate.js';
+import { balanceAtDate, todayStr } from '../balances.js';
 
 const ACCOUNT_TYPES = ['corrente', 'poupanca', 'carteira', 'investimento'];
 
@@ -20,34 +21,13 @@ const updateStmt = db.prepare(
 const deleteStmt = db.prepare('DELETE FROM accounts WHERE id = ?');
 const listStmt = db.prepare('SELECT * FROM accounts ORDER BY name');
 const listActiveStmt = db.prepare('SELECT * FROM accounts WHERE archived = 0 ORDER BY name');
-const txSumsStmt = db.prepare(
-  `SELECT
-     COALESCE(SUM(CASE WHEN kind = 'income' THEN amount_cents ELSE 0 END), 0) AS income,
-     COALESCE(SUM(CASE WHEN kind = 'expense' THEN amount_cents ELSE 0 END), 0) AS expense
-   FROM transactions WHERE account_id = ?`
-);
-const latestSnapshotStmt = db.prepare(
-  `SELECT balance_cents FROM investment_snapshots
-   WHERE account_id = ? AND date <= ?
-   ORDER BY date DESC LIMIT 1`
-);
 const txCountStmt = db.prepare('SELECT COUNT(*) AS n FROM transactions WHERE account_id = ?');
 const snapshotCountStmt = db.prepare(
   'SELECT COUNT(*) AS n FROM investment_snapshots WHERE account_id = ?'
 );
 
-function balanceFromLedger(account) {
-  const { income, expense } = txSumsStmt.get(account.id);
-  return account.opening_balance_cents + income - expense;
-}
-
 function computeBalanceCents(account) {
-  if (account.type === 'investimento') {
-    const today = new Date().toISOString().slice(0, 10);
-    const snapshot = latestSnapshotStmt.get(account.id, today);
-    if (snapshot) return snapshot.balance_cents;
-  }
-  return balanceFromLedger(account);
+  return balanceAtDate(account, todayStr());
 }
 
 function toJson(account) {
