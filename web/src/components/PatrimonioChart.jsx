@@ -1,13 +1,11 @@
-import { useState } from 'react'
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Tooltip } from 'chart.js'
 import { Line } from 'react-chartjs-2'
-import { useApi } from '../hooks/useApi.js'
 import { formatBRL } from '../lib/format.js'
 import { SkeletonCard } from './Skeleton.jsx'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip)
 
-const WINDOWS = [
+export const WINDOWS = [
   { value: 6, label: '6 meses' },
   { value: 12, label: '12 meses' },
   { value: 24, label: '24 meses' },
@@ -17,7 +15,7 @@ function toISODate(d) {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
 }
 
-function periodRange(months) {
+export function periodRange(months) {
   const today = new Date()
   const to = toISODate(new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())))
   const fromDate = new Date(Date.UTC(today.getFullYear(), today.getMonth() - (months - 1), 1))
@@ -37,11 +35,7 @@ function abbreviateBRL(cents) {
   return formatBRL(cents)
 }
 
-export default function PatrimonioChart({ hasAccounts }) {
-  const [months, setMonths] = useState(12)
-  const { from, to } = periodRange(months)
-  const { data, loading, error } = useApi(`/networth?from=${from}&to=${to}&granularity=month`)
-
+export default function PatrimonioChart({ hasAccounts, months, onMonthsChange, data, loading, error }) {
   const items = data ?? []
 
   return (
@@ -53,7 +47,7 @@ export default function PatrimonioChart({ hasAccounts }) {
             <button
               key={w.value}
               type="button"
-              onClick={() => setMonths(w.value)}
+              onClick={() => onMonthsChange(w.value)}
               className={`rounded-lg px-3 py-1 text-xs font-medium ${
                 months === w.value ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-100'
               }`}

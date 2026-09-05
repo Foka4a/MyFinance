@@ -4,20 +4,9 @@ import { put, del } from '../lib/api.js'
 import { formatBRL, formatDate } from '../lib/format.js'
 import StatCard from '../components/StatCard.jsx'
 import { SkeletonCard } from '../components/Skeleton.jsx'
-import PatrimonioChart from '../components/PatrimonioChart.jsx'
+import PatrimonioChart, { periodRange } from '../components/PatrimonioChart.jsx'
 import AccountForm, { ACCOUNT_TYPES, ACCOUNT_TYPE_LABELS } from '../components/AccountForm.jsx'
 import SnapshotForm from '../components/SnapshotForm.jsx'
-
-function todayISO() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-function monthsAgoISO(n) {
-  const d = new Date()
-  d.setMonth(d.getMonth() - n)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
 
 export default function Contas() {
   const [includeArchived, setIncludeArchived] = useState(false)
@@ -26,6 +15,7 @@ export default function Contas() {
   const [listError, setListError] = useState(null)
   const [snapshotModalOpen, setSnapshotModalOpen] = useState(false)
   const [selectedInvId, setSelectedInvId] = useState(null)
+  const [patrimonioMonths, setPatrimonioMonths] = useState(12)
 
   // Sempre ativas: base para os cards de resumo do topo (nao muda com o toggle de arquivadas).
   const { data: activeAccounts, loading: activeLoading, error: activeError, reload: reloadActive } = useApi('/accounts')
@@ -33,8 +23,11 @@ export default function Contas() {
   const listPath = `/accounts?includeArchived=${includeArchived ? 1 : 0}`
   const { data: listedAccounts, loading: listLoading, error: fetchListError, reload: reloadList } = useApi(listPath)
 
-  // Janela fixa de 12 meses para o card de crescimento, independente do seletor do grafico.
-  const { data: networth12 } = useApi(`/networth?from=${monthsAgoISO(11)}&to=${todayISO()}&granularity=month`)
+  // Mesma janela do seletor do grafico de patrimonio: card de crescimento e grafico sempre mostram o mesmo periodo.
+  const { from: networthFrom, to: networthTo } = periodRange(patrimonioMonths)
+  const { data: networthSeries, loading: networthLoading, error: networthError } = useApi(
+    `/networth?from=${networthFrom}&to=${networthTo}&granularity=month`
+  )
 
   function reloadAccounts() {
     reloadActive()
@@ -62,11 +55,11 @@ export default function Contas() {
     .filter((a) => a.type === 'investimento')
     .reduce((sum, a) => sum + a.balanceCents, 0)
 
-  const growthItems = networth12 ?? []
+  const growthItems = networthSeries ?? []
   const growthFirst = growthItems[0]?.totalCents ?? 0
   const growthLast = growthItems[growthItems.length - 1]?.totalCents ?? 0
   const growthDeltaCents = growthLast - growthFirst
-  const growthPct = growthFirst !== 0 ? (growthDeltaCents / Math.abs(growthFirst)) * 100 : growthDeltaCents !== 0 ? 100 : 0
+  const growthPct = growthFirst !== 0 ? (growthDeltaCents / Math.abs(growthFirst)) * 100 : null
 
   function openNewAccount() {
     setEditingAccount(null)
@@ -135,11 +128,10 @@ export default function Contas() {
         <StatCard label="Disponível" valueCents={disponivelCents} loading={activeLoading} />
         <StatCard label="Investido" valueCents={investidoCents} loading={activeLoading} />
         <StatCard
-          label="Crescimento no período"
+          label={`Crescimento (${patrimonioMonths} meses)`}
           valueCents={growthDeltaCents}
           variationPct={growthPct}
-          hint="últimos 12 meses"
-          loading={activeLoading}
+          loading={activeLoading || networthLoading}
         />
       </div>
 
@@ -150,7 +142,14 @@ export default function Contas() {
       )}
 
       <div className="mb-4">
-        <PatrimonioChart hasAccounts={(activeAccounts ?? []).length > 0} />
+        <PatrimonioChart
+          hasAccounts={(activeAccounts ?? []).length > 0}
+          months={patrimonioMonths}
+          onMonthsChange={setPatrimonioMonths}
+          data={networthSeries}
+          loading={networthLoading}
+          error={networthError}
+        />
       </div>
 
       <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
