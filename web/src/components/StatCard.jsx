@@ -1,7 +1,14 @@
 import Skeleton from './Skeleton.jsx'
 import { formatBRL, formatPct } from '../lib/format.js'
 
-export default function StatCard({ label, valueCents, variationPct, hint, loading }) {
+export default function StatCard({
+  label,
+  valueCents,
+  variationPct,
+  hint,
+  loading,
+  invertVariationColor = false,
+}) {
   if (loading) {
     return (
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -12,7 +19,8 @@ export default function StatCard({ label, valueCents, variationPct, hint, loadin
     )
   }
 
-  const isPositive = variationPct != null && variationPct >= 0
+  const isUp = variationPct != null && variationPct >= 0
+  const isGood = invertVariationColor ? !isUp : isUp
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -24,12 +32,12 @@ export default function StatCard({ label, valueCents, variationPct, hint, loadin
         {variationPct != null && (
           <span
             className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
-              isPositive
+              isGood
                 ? 'bg-emerald-50 text-emerald-600'
                 : 'bg-rose-50 text-rose-600'
             }`}
           >
-            {isPositive ? '▲' : '▼'} {formatPct(variationPct)}
+            {isUp ? '▲' : '▼'} {formatPct(variationPct)}
           </span>
         )}
         {hint && <span className="text-xs text-slate-400">{hint}</span>}
