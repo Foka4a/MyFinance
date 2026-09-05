@@ -11,7 +11,7 @@
     "test": "node test/format.test.mjs && node test/txQuery.test.mjs"
   },
   "dependencies": {
-    "@tanstack/react-table": "^9.2.4",
+    "@tanstack/react-table": "^8.21.3",
     "chart.js": "^4.5.1",
     "react": "^19.2.8",
     "react-chartjs-2": "^5.3.1",

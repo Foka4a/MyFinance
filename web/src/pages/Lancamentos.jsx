@@ -1,12 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { flexRender } from '@tanstack/react-table'
-// ponytail: installed @tanstack/react-table is v9, which dropped useReactTable/
-// getCoreRowModel for a new features-based API. useLegacyTable is the official
-// v8-compat bridge (same behavior, deprecated name) — use it instead of hand-
-// rolling the v9 tableFeatures() setup for a table that only needs core rendering
-// (sorting/pagination are server-side already). Upgrade to the native v9 API if
-// this table grows client-side sorting/filtering needs.
-import { useLegacyTable as useReactTable, getCoreRowModel } from '@tanstack/react-table/legacy'
+import { useReactTable, getCoreRowModel, flexRender } from '@tanstack/react-table'
 import { useApi } from '../hooks/useApi.js'
 import { del } from '../lib/api.js'
 import { formatBRL, formatDate } from '../lib/format.js'
