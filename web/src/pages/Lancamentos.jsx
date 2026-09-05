@@ -8,7 +8,7 @@ import { flexRender } from '@tanstack/react-table'
 // this table grows client-side sorting/filtering needs.
 import { useLegacyTable as useReactTable, getCoreRowModel } from '@tanstack/react-table/legacy'
 import { useApi } from '../hooks/useApi.js'
-import { get, del } from '../lib/api.js'
+import { del } from '../lib/api.js'
 import { formatBRL, formatDate } from '../lib/format.js'
 import { buildTransactionsQuery, monthRange } from '../lib/txQuery.js'
 import StatCard from '../components/StatCard.jsx'
@@ -17,24 +17,6 @@ import TransactionForm from '../components/TransactionForm.jsx'
 
 const PAGE_SIZE = 20
 const DEFAULT_FILTERS = { ...monthRange(), kind: '', categoryId: '', accountId: '' }
-
-// ponytail: no /api/summary endpoint exists on the server yet. Aggregate the
-// period totals here by paging through /api/transactions per kind instead of
-// inventing a new server route. Upgrade to a real summary endpoint if this
-// ever needs to run over periods with heavy transaction volume.
-async function sumByKind(kind, from, to) {
-  let page = 1
-  let total = Infinity
-  let sum = 0
-  while ((page - 1) * 200 < total) {
-    const qs = new URLSearchParams({ from, to, kind, page: String(page), pageSize: '200' }).toString()
-    const res = await get(`/transactions?${qs}`)
-    total = res.total
-    sum += res.items.reduce((s, t) => s + t.amountCents, 0)
-    page += 1
-  }
-  return sum
-}
 
 function SortableHeader({ label, column, sort, onSort }) {
   const active = sort.column === column
@@ -57,32 +39,14 @@ export default function Lancamentos() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
 
-  const [totals, setTotals] = useState(null)
-  const [totalsLoading, setTotalsLoading] = useState(true)
-
   const { data: categories } = useApi('/categories')
   const { data: accounts } = useApi('/accounts')
 
   const txPath = `/transactions?${buildTransactionsQuery(filters, sort, page, PAGE_SIZE)}`
   const { data: txData, loading: txLoading, error: txError, reload: reloadTx } = useApi(txPath)
 
-  useEffect(() => {
-    let cancelled = false
-    setTotalsLoading(true)
-    Promise.all([sumByKind('income', filters.from, filters.to), sumByKind('expense', filters.from, filters.to)])
-      .then(([income, expense]) => {
-        if (!cancelled) setTotals({ income, expense })
-      })
-      .catch(() => {
-        if (!cancelled) setTotals(null)
-      })
-      .finally(() => {
-        if (!cancelled) setTotalsLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [filters.from, filters.to])
+  const summaryPath = `/summary?from=${filters.from}&to=${filters.to}`
+  const { data: summary, loading: totalsLoading } = useApi(summaryPath)
 
   useEffect(() => {
     setPage(1)
@@ -120,13 +84,13 @@ export default function Lancamentos() {
   }
 
   async function handleDelete(tx) {
-    if (!confirm(`Excluir o lancamento "${tx.description}"?`)) return
+    if (!confirm(`Excluir o lançamento "${tx.description}"?`)) return
     await del(`/transactions/${tx.id}`)
     reloadTx()
   }
 
   const filteredCategories = (categories ?? []).filter((c) => !filters.kind || c.kind === filters.kind)
-  const hintPeriodoCompleto = filters.categoryId || filters.accountId ? 'periodo completo' : null
+  const hintPeriodoCompleto = filters.categoryId || filters.accountId ? 'período completo' : null
 
   const columns = useMemo(
     () => [
@@ -137,7 +101,7 @@ export default function Lancamentos() {
       },
       {
         id: 'description',
-        header: () => <SortableHeader label="Descricao" column="description" sort={sort} onSort={toggleSort} />,
+        header: () => <SortableHeader label="Descrição" column="description" sort={sort} onSort={toggleSort} />,
         cell: ({ row }) => row.original.description,
       },
       {
@@ -175,14 +139,14 @@ export default function Lancamentos() {
       },
       {
         id: 'actions',
-        header: () => <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Acoes</span>,
+        header: () => <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Ações</span>,
         cell: ({ row }) => (
           <div className="flex gap-3">
             <button
               type="button"
               onClick={() => openEdit(row.original)}
               className="text-sm text-slate-500 hover:text-slate-900"
-              aria-label={`Editar lancamento ${row.original.description}`}
+              aria-label={`Editar lançamento ${row.original.description}`}
             >
               Editar
             </button>
@@ -190,7 +154,7 @@ export default function Lancamentos() {
               type="button"
               onClick={() => handleDelete(row.original)}
               className="text-sm text-rose-500 hover:text-rose-700"
-              aria-label={`Excluir lancamento ${row.original.description}`}
+              aria-label={`Excluir lançamento ${row.original.description}`}
             >
               Excluir
             </button>
@@ -215,13 +179,13 @@ export default function Lancamentos() {
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-slate-900">Lancamentos</h1>
+        <h1 className="text-xl font-semibold text-slate-900">Lançamentos</h1>
         <button
           type="button"
           onClick={openNew}
           className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-800"
         >
-          Novo lancamento
+          Novo lançamento
         </button>
       </div>
 
@@ -240,7 +204,7 @@ export default function Lancamentos() {
         </div>
         <div>
           <label htmlFor="filter-to" className="mb-1 block text-sm text-slate-600">
-            Ate
+            Até
           </label>
           <input
             id="filter-to"
@@ -315,19 +279,19 @@ export default function Lancamentos() {
       <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard
           label="Receitas"
-          valueCents={totals?.income ?? 0}
+          valueCents={summary?.incomeCents ?? 0}
           hint={hintPeriodoCompleto}
           loading={totalsLoading}
         />
         <StatCard
           label="Despesas"
-          valueCents={totals?.expense ?? 0}
+          valueCents={summary?.expenseCents ?? 0}
           hint={hintPeriodoCompleto}
           loading={totalsLoading}
         />
         <StatCard
           label="Resultado"
-          valueCents={(totals?.income ?? 0) - (totals?.expense ?? 0)}
+          valueCents={summary?.netCents ?? 0}
           hint={hintPeriodoCompleto}
           loading={totalsLoading}
         />
@@ -337,17 +301,17 @@ export default function Lancamentos() {
         <SkeletonTable rows={8} />
       ) : txError ? (
         <div className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-rose-600 shadow-sm">
-          Nao foi possivel carregar os lancamentos: {txError.message}
+          Não foi possível carregar os lançamentos: {txError.message}
         </div>
       ) : (txData?.items ?? []).length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-xl border border-slate-200 bg-white p-10 text-center shadow-sm">
-          <p className="text-slate-500">Nenhum lancamento encontrado para os filtros selecionados.</p>
+          <p className="text-slate-500">Nenhum lançamento encontrado para os filtros selecionados.</p>
           <button
             type="button"
             onClick={openNew}
             className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-800"
           >
-            Novo lancamento
+            Novo lançamento
           </button>
         </div>
       ) : (
@@ -395,7 +359,7 @@ export default function Lancamentos() {
                 disabled={page * PAGE_SIZE >= total}
                 className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:opacity-40"
               >
-                Proximo
+                Próximo
               </button>
             </div>
           </div>

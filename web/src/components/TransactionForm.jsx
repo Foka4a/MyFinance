@@ -59,7 +59,7 @@ export default function TransactionForm({ open, editing, categories, accounts, o
 
     const amountCents = parseBRLToCents(form.amount)
     if (amountCents == null || amountCents <= 0) {
-      setError('Informe um valor valido, maior que zero.')
+      setError('Informe um valor válido, maior que zero.')
       return
     }
     if (!form.accountId) {
@@ -103,10 +103,10 @@ export default function TransactionForm({ open, editing, categories, accounts, o
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4 p-6">
         <h2 id="tx-form-title" className="text-lg font-semibold text-slate-900">
-          {editing ? 'Editar lancamento' : 'Novo lancamento'}
+          {editing ? 'Editar lançamento' : 'Novo lançamento'}
         </h2>
 
-        <div role="group" aria-label="Tipo do lancamento" className="flex gap-2">
+        <div role="group" aria-label="Tipo do lançamento" className="flex gap-2">
           {[
             { value: 'income', label: 'Receita' },
             { value: 'expense', label: 'Despesa' },
@@ -167,7 +167,7 @@ export default function TransactionForm({ open, editing, categories, accounts, o
 
         <div>
           <label htmlFor="tx-description" className="mb-1 block text-sm text-slate-600">
-            Descricao
+            Descrição
           </label>
           <input
             id="tx-description"
@@ -223,7 +223,7 @@ export default function TransactionForm({ open, editing, categories, accounts, o
 
         <div>
           <label htmlFor="tx-notes" className="mb-1 block text-sm text-slate-600">
-            Observacao
+            Observação
           </label>
           <textarea
             id="tx-notes"
