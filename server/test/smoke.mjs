@@ -138,6 +138,58 @@ try {
   const notFound = await request('DELETE', '/api/transactions/999999');
   assert.equal(notFound.status, 404);
 
+  // --- regressao: amountCents alem de MAX_SAFE_INTEGER deve ser rejeitado, nada gravado ---
+  {
+    const before = await request('GET', `/api/transactions?accountId=${account.id}`);
+    const unsafeAmount = await request('POST', '/api/transactions', {
+      date: '2026-09-01',
+      description: 'qa-unsafe-int',
+      kind: 'expense',
+      accountId: account.id,
+      amountCents: 9007199254740993,
+    });
+    assert.equal(unsafeAmount.status, 400);
+    assert.equal(unsafeAmount.body.error, 'Valor deve ser inteiro positivo em centavos');
+    const after = await request('GET', `/api/transactions?accountId=${account.id}`);
+    assert.equal(after.body.total, before.body.total, 'nao deveria ter gravado a transacao invalida');
+  }
+
+  // --- regressao: openingBalanceCents alem de MAX_SAFE_INTEGER deve ser rejeitado ---
+  {
+    const unsafeOpening = await request('POST', '/api/accounts', {
+      name: 'Conta Unsafe',
+      type: 'corrente',
+      openingBalanceCents: 9007199254740993,
+    });
+    assert.equal(unsafeOpening.status, 400);
+    assert.equal(unsafeOpening.body.error, 'Valor deve ser inteiro em centavos');
+  }
+
+  // --- regressao: balanceCents de snapshot alem de MAX_SAFE_INTEGER deve ser rejeitado ---
+  {
+    const investAccount = await request('POST', '/api/accounts', { name: 'Invest Unsafe', type: 'investimento' });
+    assert.equal(investAccount.status, 201);
+    const unsafeSnapshot = await request('POST', '/api/investments/snapshots', {
+      accountId: investAccount.body.id,
+      date: '2026-01-05',
+      balanceCents: 9007199254740993,
+    });
+    assert.equal(unsafeSnapshot.status, 400);
+    assert.equal(unsafeSnapshot.body.error, 'Valor deve ser inteiro nao negativo em centavos');
+  }
+
+  // --- regressao: corpo JSON malformado -> 400 com mensagem pt-BR (nao a mensagem em ingles do express.json) ---
+  {
+    const res = await fetch(base + '/api/accounts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{ this is not json',
+    });
+    const malformed = { status: res.status, body: JSON.parse(await res.text()) };
+    assert.equal(malformed.status, 400);
+    assert.equal(malformed.body.error, 'Corpo da requisicao nao e um JSON valido');
+  }
+
   console.log('OK - todos os testes de smoke passaram');
 } finally {
   server.close();

@@ -28,21 +28,21 @@ export function requireEnum(value, allowed, fieldLabel) {
 }
 
 export function requirePositiveIntCents(value) {
-  if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) {
     throw new ValidationError('Valor deve ser inteiro positivo em centavos');
   }
   return value;
 }
 
 export function requireNonNegativeIntCents(value) {
-  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
     throw new ValidationError('Valor deve ser inteiro nao negativo em centavos');
   }
   return value;
 }
 
 export function requireIntCents(value) {
-  if (typeof value !== 'number' || !Number.isInteger(value)) {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value)) {
     throw new ValidationError('Valor deve ser inteiro em centavos');
   }
   return value;

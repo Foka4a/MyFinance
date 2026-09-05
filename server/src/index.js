@@ -24,6 +24,10 @@ app.use('/api/networth', networthRouter);
 
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
+  if (err instanceof SyntaxError && 'body' in err) {
+    res.status(400).json({ error: 'Corpo da requisicao nao e um JSON valido' });
+    return;
+  }
   const status = err.status || err.statusCode || 500;
   if (status === 500) {
     console.error(err);
