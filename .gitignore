@@ -3,3 +3,7 @@ dist/
 *.db
 *.db-journal
 .env
+CLAUDE.md
+agents/
+server/test/qa-audit.mjs
+server/test/qa-regression.mjs
