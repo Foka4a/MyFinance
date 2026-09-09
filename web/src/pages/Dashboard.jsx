@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useApi } from '../hooks/useApi.js'
-import { formatBRL, formatDate } from '../lib/format.js'
+import { formatDate } from '../lib/format.js'
 import { monthRange, toISODate } from '../lib/txQuery.js'
+import { DateRangeField } from '../components/DateField.jsx'
 import StatCard from '../components/StatCard.jsx'
 import DonutGastos from '../components/DonutGastos.jsx'
-import { SkeletonTable } from '../components/Skeleton.jsx'
+import { SkeletonList } from '../components/Skeleton.jsx'
+import { Dot, EmptyState, ErrorNote, Money, PageHeader, Segmented, btnLink, card } from '../components/ui.jsx'
 
 function weekRange(now = new Date()) {
   const day = now.getDay()
@@ -17,14 +19,26 @@ function weekRange(now = new Date()) {
   return { from: toISODate(monday), to: toISODate(sunday) }
 }
 
+// Pontos dos cards: mesmas cores dos tokens, aqui em hex porque viram style inline.
+const SERIES = { jade: '#50d492', vinho: '#f96f70', azul: '#8a9bff', ouro: '#eba941', muted: '#70757c' }
+
 const WEEK = weekRange()
 const MONTH = monthRange()
+
+const PRESETS = [
+  { value: 'week', label: 'Esta semana' },
+  { value: 'month', label: 'Este mês' },
+]
 
 export default function Dashboard() {
   const [period, setPeriod] = useState(MONTH)
 
-  const isWeek = period.from === WEEK.from && period.to === WEEK.to
-  const isMonth = period.from === MONTH.from && period.to === MONTH.to
+  const preset =
+    period.from === WEEK.from && period.to === WEEK.to
+      ? 'week'
+      : period.from === MONTH.from && period.to === MONTH.to
+        ? 'month'
+        : null
 
   const summaryPath = `/summary?from=${period.from}&to=${period.to}`
   const { data: summary, loading: summaryLoading, error: summaryError } = useApi(summaryPath)
@@ -35,140 +49,125 @@ export default function Dashboard() {
   const txPath = `/transactions?from=${period.from}&to=${period.to}&pageSize=5&sort=date&order=desc`
   const { data: txData, loading: txLoading, error: txError } = useApi(txPath)
 
-  const variationHint = summary
-    ? `vs ${formatDate(summary.previous.from)} a ${formatDate(summary.previous.to)}`
+  const comparacao = summary
+    ? `Variação comparada com ${formatDate(summary.previous.from)} – ${formatDate(summary.previous.to)}.`
     : null
 
   return (
     <div>
-      <h1 className="text-xl font-semibold text-slate-900 mb-4">Dashboard</h1>
-
-      <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <button
-          type="button"
-          onClick={() => setPeriod(WEEK)}
-          className={`rounded-lg px-3 py-1.5 text-sm ${
-            isWeek ? 'bg-slate-900 text-white' : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
-          }`}
-        >
-          Esta semana
-        </button>
-        <button
-          type="button"
-          onClick={() => setPeriod(MONTH)}
-          className={`rounded-lg px-3 py-1.5 text-sm ${
-            isMonth ? 'bg-slate-900 text-white' : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
-          }`}
-        >
-          Este mês
-        </button>
-        <div className="flex items-center gap-2">
-          <label htmlFor="period-from" className="text-sm text-slate-600">
-            De
-          </label>
-          <input
-            id="period-from"
-            type="date"
-            value={period.from}
-            onChange={(e) => setPeriod((p) => ({ ...p, from: e.target.value }))}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm"
+      <PageHeader title="Dashboard" lede="Onde seu dinheiro está e para onde ele foi no período.">
+        <div className="flex flex-wrap items-center gap-2">
+          <Segmented
+            label="Período"
+            value={preset}
+            onChange={(v) => setPeriod(v === 'week' ? WEEK : MONTH)}
+            options={PRESETS}
           />
-          <label htmlFor="period-to" className="text-sm text-slate-600">
-            Até
-          </label>
-          <input
-            id="period-to"
-            type="date"
-            value={period.to}
-            onChange={(e) => setPeriod((p) => ({ ...p, to: e.target.value }))}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm"
-          />
+          <DateRangeField from={period.from} to={period.to} onChange={setPeriod} />
         </div>
-      </div>
+      </PageHeader>
 
       {summaryError ? (
-        <div className="mb-4 rounded-xl border border-slate-200 bg-white p-6 text-sm text-rose-600 shadow-sm">
-          Não foi possível carregar o resumo: {summaryError.message}
-        </div>
+        <ErrorNote className="mb-8">Não foi possível carregar o resumo: {summaryError.message}</ErrorNote>
       ) : (
-        <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          <StatCard
-            label="Saldo atual"
-            valueCents={summary?.balanceCents}
-            hint="patrimônio total"
-            loading={summaryLoading}
-          />
-          <StatCard
-            label="Receitas"
-            valueCents={summary?.incomeCents}
-            variationPct={summary?.variation?.incomePct}
-            hint={variationHint}
-            loading={summaryLoading}
-          />
-          <StatCard
-            label="Despesas"
-            valueCents={summary?.expenseCents}
-            variationPct={summary?.variation?.expensePct}
-            invertVariationColor
-            hint={variationHint}
-            loading={summaryLoading}
-          />
-          <StatCard
-            label="Resultado líquido"
-            valueCents={summary?.netCents}
-            variationPct={summary?.variation?.netPct}
-            hint={variationHint}
-            loading={summaryLoading}
-          />
-          <StatCard
-            label="Disponível"
-            valueCents={summary?.availableCents}
-            hint="fora investimentos"
-            loading={summaryLoading}
-          />
-        </div>
+        <>
+          <section className="mb-6">
+            <StatCard
+              variant="hero"
+              label="Saldo atual · todas as contas"
+              valueCents={summary?.balanceCents}
+              variationPct={summary?.variation?.netPct}
+              hint={comparacao}
+              tone="auto"
+              loading={summaryLoading}
+            />
+          </section>
+
+          <section className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard
+              label="Receitas"
+              valueCents={summary?.incomeCents}
+              variationPct={summary?.variation?.incomePct}
+              dot={SERIES.jade}
+              loading={summaryLoading}
+            />
+            <StatCard
+              label="Despesas"
+              valueCents={summary?.expenseCents}
+              variationPct={summary?.variation?.expensePct}
+              dot={SERIES.vinho}
+              invertVariationColor
+              loading={summaryLoading}
+            />
+            <StatCard
+              label="Resultado líquido"
+              valueCents={summary?.netCents}
+              variationPct={summary?.variation?.netPct}
+              dot={SERIES.azul}
+              tone="auto"
+              loading={summaryLoading}
+            />
+            <StatCard
+              label="Disponível"
+              valueCents={summary?.availableCents}
+              dot={SERIES.ouro}
+              hint="fora dos investimentos"
+              loading={summaryLoading}
+            />
+          </section>
+        </>
       )}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <DonutGastos data={categories} loading={categoriesLoading} error={categoriesError} />
 
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-3 flex items-center justify-between">
-            <p className="text-sm font-medium text-slate-900">Últimos lançamentos</p>
-            <Link to="/lancamentos" className="text-sm text-slate-500 hover:text-slate-900">
-              Ver todos
+        <section className={`${card} flex flex-col p-5`}>
+          <div className="mb-1 flex items-center justify-between gap-4">
+            <h2 className="text-sm font-semibold text-ink">Últimos lançamentos</h2>
+            <Link to="/lancamentos" className={`${btnLink} text-[12.5px]`}>
+              Ver todos →
             </Link>
           </div>
 
           {txLoading ? (
-            <SkeletonTable rows={5} />
+            <SkeletonList rows={5} />
           ) : txError ? (
-            <p className="text-sm text-rose-600">Não foi possível carregar os lançamentos: {txError.message}</p>
+            <ErrorNote>Não foi possível carregar os lançamentos: {txError.message}</ErrorNote>
           ) : (txData?.items ?? []).length === 0 ? (
-            <p className="py-10 text-center text-sm text-slate-500">Nenhum lançamento no período</p>
+            <EmptyState
+              title="Nenhum lançamento no período"
+              hint="Registre uma entrada ou saída para ver o movimento aqui."
+              action={
+                <Link to="/lancamentos" className={btnLink}>
+                  Ir para lançamentos
+                </Link>
+              }
+            />
           ) : (
-            <ul className="flex flex-col gap-3">
+            <ul className="flex flex-col divide-y divide-line-soft">
               {txData.items.map((tx) => {
                 const isIncome = tx.kind === 'income'
                 return (
-                  <li key={tx.id} className="flex items-center justify-between text-sm">
-                    <div className="flex flex-col">
-                      <span className="text-slate-900">{tx.description}</span>
-                      <span className="text-xs text-slate-500">
-                        {formatDate(tx.date)}
-                        {tx.categoryName ? ` · ${tx.categoryName}` : ''}
-                      </span>
+                  <li key={tx.id} className="flex items-center gap-3 py-3.5">
+                    <Dot color={tx.categoryColor ?? SERIES.muted} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[13.5px] text-ink">{tx.description}</p>
+                      <p className="mt-0.5 text-[11.5px] text-ink-3">
+                        {[formatDate(tx.date), tx.categoryName, tx.accountName].filter(Boolean).join(' · ')}
+                      </p>
                     </div>
-                    <span className={`font-medium ${isIncome ? 'text-emerald-600' : 'text-rose-600'}`}>
-                      {isIncome ? '+ ' : '- '}
-                      {formatBRL(tx.amountCents)}
-                    </span>
+                    <Money
+                      cents={tx.amountCents}
+                      sign={isIncome ? '+' : '−'}
+                      tone={isIncome ? 'jade' : 'vinho'}
+                      className="shrink-0 text-[13.5px]"
+                    />
                   </li>
                 )
               })}
             </ul>
           )}
-        </div>
+        </section>
       </div>
     </div>
   )

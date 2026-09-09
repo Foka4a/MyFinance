@@ -3,10 +3,34 @@ import { useApi } from '../hooks/useApi.js'
 import { put, del } from '../lib/api.js'
 import { formatBRL, formatDate } from '../lib/format.js'
 import StatCard from '../components/StatCard.jsx'
-import { SkeletonCard } from '../components/Skeleton.jsx'
+import { SkeletonList, SkeletonRows } from '../components/Skeleton.jsx'
 import PatrimonioChart, { periodRange } from '../components/PatrimonioChart.jsx'
 import AccountForm, { ACCOUNT_TYPES, ACCOUNT_TYPE_LABELS } from '../components/AccountForm.jsx'
 import SnapshotForm from '../components/SnapshotForm.jsx'
+import ConfirmDialog from '../components/ConfirmDialog.jsx'
+import {
+  Dot,
+  EmptyState,
+  ErrorNote,
+  Money,
+  PageHeader,
+  btnGhost,
+  btnLink,
+  btnLinkDanger,
+  btnPrimary,
+  card,
+  inputSm,
+  th,
+} from '../components/ui.jsx'
+
+// Cor por tipo de conta, nao por conta: duas contas correntes lidas lado a lado
+// contam a mesma historia, e o tipo e o que muda o peso no patrimonio.
+const TYPE_COLOR = {
+  corrente: '#c889d7',
+  poupanca: '#8a9bff',
+  carteira: '#54cc8e',
+  investimento: '#00c4c4',
+}
 
 export default function Contas() {
   const [includeArchived, setIncludeArchived] = useState(false)
@@ -16,6 +40,7 @@ export default function Contas() {
   const [snapshotModalOpen, setSnapshotModalOpen] = useState(false)
   const [selectedInvId, setSelectedInvId] = useState(null)
   const [patrimonioMonths, setPatrimonioMonths] = useState(12)
+  const [confirmRequest, setConfirmRequest] = useState(null)
 
   // Sempre ativas: base para os cards de resumo do topo (nao muda com o toggle de arquivadas).
   const { data: activeAccounts, loading: activeLoading, error: activeError, reload: reloadActive } = useApi('/accounts')
@@ -92,21 +117,28 @@ export default function Contas() {
     }
   }
 
-  async function handleDeleteAccount(account) {
-    if (!confirm(`Excluir a conta "${account.name}"?`)) return
-    setListError(null)
-    try {
-      await del(`/accounts/${account.id}`)
-      reloadAccounts()
-    } catch (err) {
-      setListError(err.message)
-    }
+  function askDeleteAccount(account) {
+    setConfirmRequest({
+      title: 'Excluir conta',
+      description: `A conta "${account.name}" sai do patrimônio. Se ela tiver lançamentos, arquivar preserva o histórico.`,
+      confirmLabel: 'Excluir conta',
+      onConfirm: async () => {
+        await del(`/accounts/${account.id}`)
+        reloadAccounts()
+      },
+    })
   }
 
-  async function handleDeleteSnapshot(snapshot) {
-    if (!confirm(`Excluir o valor registrado em ${formatDate(snapshot.date)}?`)) return
-    await del(`/investments/snapshots/${snapshot.id}`)
-    reloadSnapshots()
+  function askDeleteSnapshot(snapshot) {
+    setConfirmRequest({
+      title: 'Excluir valor registrado',
+      description: `O valor de ${formatDate(snapshot.date)} (${formatBRL(snapshot.balanceCents)}) sai do histórico de patrimônio.`,
+      confirmLabel: 'Excluir valor',
+      onConfirm: async () => {
+        await del(`/investments/snapshots/${snapshot.id}`)
+        reloadSnapshots()
+      },
+    })
   }
 
   function handleSnapshotSaved() {
@@ -114,34 +146,67 @@ export default function Contas() {
     reloadSnapshots()
   }
 
-  const grouped = ACCOUNT_TYPES.map((type) => ({
-    type,
-    accounts: (listedAccounts ?? []).filter((a) => a.type === type),
-  })).filter((g) => g.accounts.length > 0)
+  // Ordena por tipo pra as cores agruparem sozinhas na grade.
+  const visibleAccounts = [...(listedAccounts ?? [])].sort(
+    (a, b) => ACCOUNT_TYPES.indexOf(a.type) - ACCOUNT_TYPES.indexOf(b.type)
+  )
+
+  function shareOf(cents) {
+    if (!patrimonioTotalCents) return 'primeira conta do patrimônio'
+    return `${Math.round((cents / patrimonioTotalCents) * 100)}% do patrimônio`
+  }
 
   return (
     <div>
-      <h1 className="mb-4 text-xl font-semibold text-slate-900">Contas e Investimentos</h1>
+      <PageHeader title="Contas e investimentos" lede="Onde o dinheiro está e como o patrimônio se moveu.">
+        <button type="button" onClick={openNewAccount} className={btnPrimary}>
+          Nova conta
+        </button>
+      </PageHeader>
 
-      <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Patrimônio total" valueCents={patrimonioTotalCents} loading={activeLoading} />
-        <StatCard label="Disponível" valueCents={disponivelCents} loading={activeLoading} />
-        <StatCard label="Investido" valueCents={investidoCents} loading={activeLoading} />
-        <StatCard
-          label={`Crescimento (${patrimonioMonths} meses)`}
-          valueCents={growthDeltaCents}
-          variationPct={growthPct}
-          loading={activeLoading || networthLoading}
-        />
-      </div>
+      {activeError ? (
+        <ErrorNote className="mb-8">Não foi possível carregar as contas: {activeError.message}</ErrorNote>
+      ) : (
+        <>
+          <section className="mb-6">
+            <StatCard
+              variant="hero"
+              label="Patrimônio total"
+              valueCents={patrimonioTotalCents}
+              variationPct={growthPct}
+              hint={`Variação dos últimos ${patrimonioMonths} meses.`}
+              tone="auto"
+              loading={activeLoading || networthLoading}
+            />
+          </section>
 
-      {activeError && (
-        <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4 text-sm text-rose-600 shadow-sm">
-          Não foi possível carregar as contas: {activeError.message}
-        </div>
+          <section className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <StatCard
+              label="Disponível"
+              valueCents={disponivelCents}
+              dot={TYPE_COLOR.carteira}
+              hint="fora dos investimentos"
+              loading={activeLoading}
+            />
+            <StatCard
+              label="Investido"
+              valueCents={investidoCents}
+              dot={TYPE_COLOR.investimento}
+              hint={investidoCents === 0 ? 'nenhuma carteira cadastrada' : undefined}
+              loading={activeLoading}
+            />
+            <StatCard
+              label={`Crescimento em ${patrimonioMonths} meses`}
+              valueCents={growthDeltaCents}
+              dot={TYPE_COLOR.poupanca}
+              tone="auto"
+              loading={activeLoading || networthLoading}
+            />
+          </section>
+        </>
       )}
 
-      <div className="mb-4">
+      <div className="mb-5">
         <PatrimonioChart
           hasAccounts={(activeAccounts ?? []).length > 0}
           months={patrimonioMonths}
@@ -152,134 +217,116 @@ export default function Contas() {
         />
       </div>
 
-      <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-sm font-medium text-slate-700">Contas</h2>
-          <div className="flex items-center gap-4">
-            <label className="flex items-center gap-2 text-sm text-slate-600">
-              <input
-                type="checkbox"
-                checked={includeArchived}
-                onChange={(e) => setIncludeArchived(e.target.checked)}
-              />
-              Mostrar contas arquivadas
-            </label>
-            <button
-              type="button"
-              onClick={openNewAccount}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-800"
-            >
-              Nova conta
-            </button>
-          </div>
+      <section className="mb-5">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+          <h2 className="text-sm font-semibold text-ink">Contas</h2>
+          <label className="flex cursor-pointer items-center gap-2 text-[12.5px] text-ink-2">
+            <input
+              type="checkbox"
+              checked={includeArchived}
+              onChange={(e) => setIncludeArchived(e.target.checked)}
+              className="size-4 accent-azul"
+            />
+            Mostrar arquivadas
+          </label>
         </div>
 
-        {listError && (
-          <p className="mb-4 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-600" role="alert">
-            {listError}
-          </p>
-        )}
+        {listError && <ErrorNote className="mb-4">{listError}</ErrorNote>}
 
         {listLoading ? (
-          <SkeletonCard />
-        ) : fetchListError ? (
-          <p className="text-sm text-rose-600">Não foi possível carregar as contas: {fetchListError.message}</p>
-        ) : grouped.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 py-8 text-center">
-            <p className="text-slate-500">Nenhuma conta cadastrada ainda.</p>
-            <button
-              type="button"
-              onClick={openNewAccount}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-800"
-            >
-              Nova conta
-            </button>
+          <div className={`${card} p-5`}>
+            <SkeletonList rows={4} />
           </div>
+        ) : fetchListError ? (
+          <ErrorNote>Não foi possível carregar as contas: {fetchListError.message}</ErrorNote>
         ) : (
-          <div className="flex flex-col gap-6">
-            {grouped.map((group) => (
-              <div key={group.type}>
-                <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">
-                  {ACCOUNT_TYPE_LABELS[group.type]}
-                </h3>
-                <div className="flex flex-col divide-y divide-slate-100 rounded-lg border border-slate-100">
-                  {group.accounts.map((account) => (
-                    <div
-                      key={account.id}
-                      className={`flex items-center justify-between gap-3 px-4 py-3 ${
-                        account.archived ? 'opacity-50' : ''
-                      }`}
-                    >
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-slate-900">{account.name}</span>
-                          {account.archived && (
-                            <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-600">
-                              Arquivada
-                            </span>
-                          )}
-                        </div>
-                        {account.institution && (
-                          <span className="text-sm text-slate-500">{account.institution}</span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <span
-                          className={`font-medium ${
-                            account.balanceCents >= 0 ? 'text-emerald-600' : 'text-rose-600'
-                          }`}
-                        >
-                          {formatBRL(account.balanceCents)}
-                        </span>
-                        <div className="flex gap-3">
-                          <button
-                            type="button"
-                            onClick={() => openEditAccount(account)}
-                            className="text-sm text-slate-500 hover:text-slate-900"
-                            aria-label={`Editar conta ${account.name}`}
-                          >
-                            Editar
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleArchive(account, !account.archived)}
-                            className="text-sm text-slate-500 hover:text-slate-900"
-                            aria-label={`${account.archived ? 'Desarquivar' : 'Arquivar'} conta ${account.name}`}
-                          >
-                            {account.archived ? 'Desarquivar' : 'Arquivar'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteAccount(account)}
-                            className="text-sm text-rose-500 hover:text-rose-700"
-                            aria-label={`Excluir conta ${account.name}`}
-                          >
-                            Excluir
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {visibleAccounts.map((account) => (
+              <article
+                key={account.id}
+                className={`${card} flex flex-col gap-3 p-[18px] ${account.archived ? 'opacity-55' : ''}`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <Dot color={TYPE_COLOR[account.type]} className="size-2.5" />
+                    <span className="truncate text-sm font-semibold text-ink">{account.name}</span>
+                  </div>
+                  <span className="shrink-0 rounded-full border border-line px-2.5 py-0.5 text-[11px] text-ink-3">
+                    {account.archived ? 'Arquivada' : ACCOUNT_TYPE_LABELS[account.type]}
+                  </span>
                 </div>
-              </div>
+
+                <Money cents={account.balanceCents} tone="auto" className="text-[22px] font-semibold" />
+
+                <p className="text-xs text-ink-2">
+                  {account.institution ? `${account.institution} · ` : ''}
+                  {shareOf(account.balanceCents)}
+                </p>
+
+                <div className="mt-auto flex gap-3 border-t border-line pt-3 text-[12.5px]">
+                  <button
+                    type="button"
+                    onClick={() => openEditAccount(account)}
+                    className={`${btnLink} text-[12.5px]`}
+                    aria-label={`Editar conta ${account.name}`}
+                  >
+                    Editar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleArchive(account, !account.archived)}
+                    className={`${btnLink} text-[12.5px]`}
+                    aria-label={`${account.archived ? 'Desarquivar' : 'Arquivar'} conta ${account.name}`}
+                  >
+                    {account.archived ? 'Desarquivar' : 'Arquivar'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => askDeleteAccount(account)}
+                    className={`${btnLinkDanger} ml-auto text-[12.5px]`}
+                    aria-label={`Excluir conta ${account.name}`}
+                  >
+                    Excluir
+                  </button>
+                </div>
+              </article>
             ))}
+
+            {/* Card fantasma do design: o convite pra cadastrar mora na propria
+                grade, entao a grade nunca aparece vazia. */}
+            <article className="flex flex-col items-start justify-center gap-2 rounded-card border border-dashed border-line p-[18px]">
+              <p className="text-sm font-semibold text-ink-2">Adicionar conta</p>
+              <p className="text-[12.5px] leading-relaxed text-ink-3">
+                Cadastre a conta corrente, a carteira ou o investimento para o patrimônio começar a somar.
+              </p>
+              <button type="button" onClick={openNewAccount} className={`${btnGhost} mt-1 px-3.5 py-2 text-[12.5px]`}>
+                Nova conta
+              </button>
+            </article>
           </div>
         )}
-      </div>
+      </section>
 
       {investmentAccounts.length > 0 && (
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-sm font-medium text-slate-700">Snapshots de investimento</h2>
-            <div className="flex items-center gap-3">
-              <label htmlFor="snapshot-account-select" className="text-sm text-slate-600">
+        <section className={`${card} overflow-hidden`}>
+          <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
+            <div>
+              <h2 className="text-sm font-semibold text-ink">Valores registrados</h2>
+              <p className="mt-1 text-[12.5px] text-ink-3">
+                {(snapshots ?? []).length === 0
+                  ? 'Enquanto não houver valor registrado, o saldo do investimento é o saldo inicial cadastrado na conta.'
+                  : 'O saldo de um investimento vem do último valor que você registrou.'}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <label htmlFor="snapshot-account-select" className="text-sm text-ink-3">
                 Conta
               </label>
               <select
                 id="snapshot-account-select"
                 value={selectedInvId ?? ''}
                 onChange={(e) => setSelectedInvId(Number(e.target.value))}
-                className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                className={inputSm}
               >
                 {investmentAccounts.map((a) => (
                   <option key={a.id} value={a.id}>
@@ -287,34 +334,36 @@ export default function Contas() {
                   </option>
                 ))}
               </select>
-              <button
-                type="button"
-                onClick={() => setSnapshotModalOpen(true)}
-                className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-800"
-              >
+              <button type="button" onClick={() => setSnapshotModalOpen(true)} className={btnGhost}>
                 Registrar valor
               </button>
             </div>
           </div>
 
           {snapshotsLoading ? (
-            <SkeletonCard />
+            <SkeletonRows rows={4} cols={3} />
           ) : snapshotsError ? (
-            <p className="text-sm text-rose-600">Não foi possível carregar os valores: {snapshotsError.message}</p>
+            <div className="p-5">
+              <ErrorNote>Não foi possível carregar os valores: {snapshotsError.message}</ErrorNote>
+            </div>
           ) : (snapshots ?? []).length === 0 ? (
-            <p className="py-6 text-center text-slate-500">Nenhum valor registrado para essa conta ainda.</p>
+            <EmptyState
+              title="Nenhum valor registrado nessa conta"
+              hint="Registre quanto ela vale hoje para começar a linha de patrimônio."
+              action={
+                <button type="button" onClick={() => setSnapshotModalOpen(true)} className={btnPrimary}>
+                  Registrar valor
+                </button>
+              }
+            />
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200">
-                  <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
-                    Data
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
-                    Valor
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
-                    Ações
+                <tr>
+                  <th className={th}>Data</th>
+                  <th className={`${th} text-right`}>Valor</th>
+                  <th className={`${th} text-right`}>
+                    <span className="sr-only">Ações</span>
                   </th>
                 </tr>
               </thead>
@@ -322,14 +371,21 @@ export default function Contas() {
                 {[...(snapshots ?? [])]
                   .sort((a, b) => (a.date < b.date ? 1 : -1))
                   .map((snap) => (
-                    <tr key={snap.id} className="border-b border-slate-100 last:border-0">
-                      <td className="px-4 py-2">{formatDate(snap.date)}</td>
-                      <td className="px-4 py-2">{formatBRL(snap.balanceCents)}</td>
-                      <td className="px-4 py-2">
+                    <tr
+                      key={snap.id}
+                      className="border-t border-line transition-colors hover:bg-surface-2"
+                    >
+                      <td className="px-5 py-3.5">
+                        <span className="money text-ink-3">{formatDate(snap.date)}</span>
+                      </td>
+                      <td className="px-5 py-3.5 text-right">
+                        <Money cents={snap.balanceCents} />
+                      </td>
+                      <td className="px-5 py-3.5 text-right">
                         <button
                           type="button"
-                          onClick={() => handleDeleteSnapshot(snap)}
-                          className="text-sm text-rose-500 hover:text-rose-700"
+                          onClick={() => askDeleteSnapshot(snap)}
+                          className={`${btnLinkDanger} text-[12.5px]`}
                           aria-label={`Excluir valor de ${formatDate(snap.date)}`}
                         >
                           Excluir
@@ -340,7 +396,7 @@ export default function Contas() {
               </tbody>
             </table>
           )}
-        </div>
+        </section>
       )}
 
       <AccountForm
@@ -356,6 +412,7 @@ export default function Contas() {
         onClose={() => setSnapshotModalOpen(false)}
         onSaved={handleSnapshotSaved}
       />
+      <ConfirmDialog request={confirmRequest} onClose={() => setConfirmRequest(null)} />
     </div>
   )
 }

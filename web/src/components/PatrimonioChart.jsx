@@ -1,14 +1,25 @@
-import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Tooltip } from 'chart.js'
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Filler,
+  Tooltip,
+} from 'chart.js'
 import { Line } from 'react-chartjs-2'
 import { formatBRL } from '../lib/format.js'
-import { SkeletonCard } from './Skeleton.jsx'
+import { formatBRLShort } from '../lib/chartFormat.js'
+import { C, axisX, axisY } from '../lib/chartTheme.js'
+import { SkeletonChart } from './Skeleton.jsx'
+import { card, EmptyState, ErrorNote, Segmented } from './ui.jsx'
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip)
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip)
 
 export const WINDOWS = [
-  { value: 6, label: '6 meses' },
-  { value: 12, label: '12 meses' },
-  { value: 24, label: '24 meses' },
+  { value: 6, label: '6 m' },
+  { value: 12, label: '12 m' },
+  { value: 24, label: '24 m' },
 ]
 
 function toISODate(d) {
@@ -27,47 +38,27 @@ function periodLabel(period) {
   return `${m}/${y}`
 }
 
-function abbreviateBRL(cents) {
-  const value = cents / 100
-  const abs = Math.abs(value)
-  if (abs >= 1_000_000) return `R$ ${(value / 1_000_000).toFixed(1).replace('.', ',')} mi`
-  if (abs >= 1_000) return `R$ ${(value / 1_000).toFixed(1).replace('.', ',')} mil`
-  return formatBRL(cents)
-}
-
 export default function PatrimonioChart({ hasAccounts, months, onMonthsChange, data, loading, error }) {
   const items = data ?? []
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-sm font-medium text-slate-700">Crescimento de patrimônio</h2>
-        <div className="flex gap-1">
-          {WINDOWS.map((w) => (
-            <button
-              key={w.value}
-              type="button"
-              onClick={() => onMonthsChange(w.value)}
-              className={`rounded-lg px-3 py-1 text-xs font-medium ${
-                months === w.value ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-100'
-              }`}
-            >
-              {w.label}
-            </button>
-          ))}
-        </div>
+    <section className={`${card} p-[22px]`}>
+      <div className="mb-[18px] flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold text-ink">Crescimento de patrimônio</h2>
+        <Segmented label="Janela do gráfico" value={months} onChange={onMonthsChange} options={WINDOWS} />
       </div>
 
       {loading ? (
-        <SkeletonCard />
+        <SkeletonChart />
       ) : error ? (
-        <p className="text-sm text-rose-600">Não foi possível carregar o histórico: {error.message}</p>
+        <ErrorNote>Não foi possível carregar o histórico: {error.message}</ErrorNote>
       ) : !hasAccounts || items.length === 0 ? (
-        <div className="flex h-48 items-center justify-center text-sm text-slate-500">
-          Sem histórico de patrimônio ainda.
-        </div>
+        <EmptyState
+          title="Sem histórico de patrimônio ainda"
+          hint="Registre o valor de uma conta de investimento para começar a linha."
+        />
       ) : (
-        <div className="h-64">
+        <div className="h-[220px]">
           <Line
             data={{
               labels: items.map((i) => periodLabel(i.period)),
@@ -75,33 +66,36 @@ export default function PatrimonioChart({ hasAccounts, months, onMonthsChange, d
                 {
                   label: 'Patrimônio',
                   data: items.map((i) => i.totalCents / 100),
-                  borderColor: '#0f172a',
-                  backgroundColor: '#0f172a',
+                  borderColor: C.azul,
+                  backgroundColor: C.azulFill,
+                  borderWidth: 2,
+                  fill: 'origin',
                   tension: 0.25,
+                  // Um ponto so nao desenha linha: mostra a bolinha pra nao ficar vazio.
+                  pointRadius: items.length === 1 ? 4 : 0,
+                  pointHoverRadius: 5,
+                  pointHoverBorderWidth: 2,
+                  pointHoverBorderColor: C.surface,
+                  pointHoverBackgroundColor: C.azul,
                 },
               ],
             }}
             options={{
               responsive: true,
-              maintainAspectRatio: false,
+              interaction: { mode: 'index', intersect: false },
               plugins: {
                 tooltip: {
-                  callbacks: {
-                    label: (ctx) => formatBRL(Math.round(ctx.parsed.y * 100)),
-                  },
+                  callbacks: { label: (ctx) => formatBRL(Math.round(ctx.parsed.y * 100)) },
                 },
               },
               scales: {
-                y: {
-                  ticks: {
-                    callback: (value) => abbreviateBRL(value * 100),
-                  },
-                },
+                x: axisX,
+                y: axisY((value) => formatBRLShort(value * 100)),
               },
             }}
           />
         </div>
       )}
-    </div>
+    </section>
   )
 }

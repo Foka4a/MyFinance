@@ -2,25 +2,54 @@ import { useEffect, useMemo, useState } from 'react'
 import { useReactTable, getCoreRowModel, flexRender } from '@tanstack/react-table'
 import { useApi } from '../hooks/useApi.js'
 import { del } from '../lib/api.js'
-import { formatBRL, formatDate } from '../lib/format.js'
+import { formatDate } from '../lib/format.js'
 import { buildTransactionsQuery, monthRange } from '../lib/txQuery.js'
+import { DateRangeField } from '../components/DateField.jsx'
 import StatCard from '../components/StatCard.jsx'
-import { SkeletonTable } from '../components/Skeleton.jsx'
+import { SkeletonRows } from '../components/Skeleton.jsx'
 import TransactionForm from '../components/TransactionForm.jsx'
+import ConfirmDialog from '../components/ConfirmDialog.jsx'
+import {
+  Dot,
+  EmptyState,
+  ErrorNote,
+  Money,
+  PageHeader,
+  btnGhost,
+  btnLink,
+  btnLinkDanger,
+  btnPrimary,
+  card,
+  inputSm,
+  th,
+} from '../components/ui.jsx'
 
 const PAGE_SIZE = 20
 const DEFAULT_FILTERS = { ...monthRange(), kind: '', categoryId: '', accountId: '' }
 
-function SortableHeader({ label, column, sort, onSort }) {
+function SortableHeader({ label, column, sort, onSort, align = 'left' }) {
   const active = sort.column === column
   return (
     <button
       type="button"
       onClick={() => onSort(column)}
-      className="flex items-center gap-1 text-left text-xs font-medium uppercase tracking-wide text-slate-500 hover:text-slate-700"
+      aria-label={`Ordenar por ${label}`}
+      className={`flex w-full items-center gap-1.5 text-inherit uppercase tracking-[inherit] transition-colors ${
+        align === 'right' ? 'justify-end' : ''
+      } ${active ? 'text-ink' : 'hover:text-ink-2'}`}
     >
       {label}
-      {active && <span>{sort.order === 'asc' ? '▲' : '▼'}</span>}
+      <svg
+        width="7"
+        height="7"
+        viewBox="0 0 10 10"
+        aria-hidden="true"
+        className={`transition-[opacity,transform] ${active ? 'opacity-100' : 'opacity-0'} ${
+          active && sort.order === 'desc' ? 'rotate-180' : ''
+        }`}
+      >
+        <path d="M5 1.5 9 8.5H1z" fill="currentColor" />
+      </svg>
     </button>
   )
 }
@@ -31,6 +60,7 @@ export default function Lancamentos() {
   const [page, setPage] = useState(1)
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
+  const [confirmRequest, setConfirmRequest] = useState(null)
 
   const { data: categories } = useApi('/categories')
   const { data: accounts } = useApi('/accounts')
@@ -39,7 +69,13 @@ export default function Lancamentos() {
   const { data: txData, loading: txLoading, error: txError, reload: reloadTx } = useApi(txPath)
 
   const summaryPath = `/summary?from=${filters.from}&to=${filters.to}`
-  const { data: summary, loading: totalsLoading } = useApi(summaryPath)
+  const { data: summary, loading: totalsLoading, reload: reloadSummary } = useApi(summaryPath)
+
+  // Tabela e cards vem de rotas diferentes: salvar/excluir precisa recarregar as duas.
+  function reloadAll() {
+    reloadTx()
+    reloadSummary()
+  }
 
   useEffect(() => {
     setPage(1)
@@ -49,12 +85,10 @@ export default function Lancamentos() {
     setFilters((f) => ({ ...f, [key]: value, ...(key === 'kind' ? { categoryId: '' } : {}) }))
   }
 
-  function clearFilters() {
-    setFilters(DEFAULT_FILTERS)
-  }
-
   function toggleSort(column) {
-    setSort((s) => (s.column === column ? { column, order: s.order === 'asc' ? 'desc' : 'asc' } : { column, order: 'asc' }))
+    setSort((s) =>
+      s.column === column ? { column, order: s.order === 'asc' ? 'desc' : 'asc' } : { column, order: 'asc' }
+    )
   }
 
   function openNew() {
@@ -67,86 +101,92 @@ export default function Lancamentos() {
     setModalOpen(true)
   }
 
-  function closeModal() {
-    setModalOpen(false)
-  }
-
   function handleSaved() {
     setModalOpen(false)
-    reloadTx()
+    reloadAll()
   }
 
-  async function handleDelete(tx) {
-    if (!confirm(`Excluir o lançamento "${tx.description}"?`)) return
-    await del(`/transactions/${tx.id}`)
-    reloadTx()
+  function askDelete(tx) {
+    setConfirmRequest({
+      title: 'Excluir lançamento',
+      description: `"${tx.description}" de ${formatDate(tx.date)} sai da lista e dos saldos. Não dá para desfazer.`,
+      confirmLabel: 'Excluir lançamento',
+      onConfirm: async () => {
+        await del(`/transactions/${tx.id}`)
+        reloadAll()
+      },
+    })
   }
 
   const filteredCategories = (categories ?? []).filter((c) => !filters.kind || c.kind === filters.kind)
   const hintPeriodoCompleto = filters.categoryId || filters.accountId ? 'período completo' : null
+  const dirty = JSON.stringify(filters) !== JSON.stringify(DEFAULT_FILTERS)
 
   const columns = useMemo(
     () => [
       {
         id: 'date',
         header: () => <SortableHeader label="Data" column="date" sort={sort} onSort={toggleSort} />,
-        cell: ({ row }) => formatDate(row.original.date),
+        cell: ({ row }) => <span className="money text-ink-3">{formatDate(row.original.date)}</span>,
       },
       {
         id: 'description',
         header: () => <SortableHeader label="Descrição" column="description" sort={sort} onSort={toggleSort} />,
-        cell: ({ row }) => row.original.description,
+        cell: ({ row }) => <span className="text-ink">{row.original.description}</span>,
       },
       {
         id: 'category',
-        header: () => <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Categoria</span>,
+        header: () => <span>Categoria</span>,
         cell: ({ row }) =>
           row.original.categoryName ? (
-            <span
-              className="inline-flex rounded-full px-2 py-0.5 text-xs font-medium text-white"
-              style={{ backgroundColor: row.original.categoryColor ?? '#64748b' }}
-            >
+            <span className="inline-flex items-center gap-[7px] text-[12.5px] text-ink-2">
+              <Dot color={row.original.categoryColor ?? '#70757c'} />
               {row.original.categoryName}
             </span>
           ) : (
-            <span className="text-slate-400">—</span>
+            <span className="text-[12.5px] text-ink-3">Sem categoria</span>
           ),
       },
       {
         id: 'account',
-        header: () => <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Conta</span>,
-        cell: ({ row }) => row.original.accountName,
+        header: () => <span>Conta</span>,
+        cell: ({ row }) => <span className="text-[12.5px] text-ink-2">{row.original.accountName}</span>,
       },
       {
         id: 'amount',
-        header: () => <SortableHeader label="Valor" column="amountCents" sort={sort} onSort={toggleSort} />,
+        header: () => (
+          <SortableHeader label="Valor" column="amountCents" sort={sort} onSort={toggleSort} align="right" />
+        ),
         cell: ({ row }) => {
           const isIncome = row.original.kind === 'income'
           return (
-            <span className={isIncome ? 'font-medium text-emerald-600' : 'font-medium text-rose-600'}>
-              {isIncome ? '+ ' : '- '}
-              {formatBRL(row.original.amountCents)}
-            </span>
+            <div className="text-right">
+              <Money
+                cents={row.original.amountCents}
+                sign={isIncome ? '+' : '−'}
+                tone={isIncome ? 'jade' : 'vinho'}
+              />
+            </div>
           )
         },
       },
       {
         id: 'actions',
-        header: () => <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Ações</span>,
+        header: () => <span className="sr-only">Ações</span>,
         cell: ({ row }) => (
-          <div className="flex gap-3">
+          <div className="flex justify-end gap-3">
             <button
               type="button"
               onClick={() => openEdit(row.original)}
-              className="text-sm text-slate-500 hover:text-slate-900"
+              className={`${btnLink} text-[12.5px]`}
               aria-label={`Editar lançamento ${row.original.description}`}
             >
               Editar
             </button>
             <button
               type="button"
-              onClick={() => handleDelete(row.original)}
-              className="text-sm text-rose-500 hover:text-rose-700"
+              onClick={() => askDelete(row.original)}
+              className={`${btnLinkDanger} text-[12.5px]`}
               aria-label={`Excluir lançamento ${row.original.description}`}
             >
               Excluir
@@ -171,191 +211,180 @@ export default function Lancamentos() {
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-slate-900">Lançamentos</h1>
-        <button
-          type="button"
-          onClick={openNew}
-          className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-800"
-        >
+      <PageHeader title="Lançamentos" lede="Toda entrada e saída registrada, com filtros por período, tipo, categoria e conta.">
+        <button type="button" onClick={openNew} className={btnPrimary}>
           Novo lançamento
         </button>
-      </div>
+      </PageHeader>
 
-      <div className="mb-4 grid grid-cols-1 gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-2 lg:grid-cols-5">
-        <div>
-          <label htmlFor="filter-from" className="mb-1 block text-sm text-slate-600">
-            De
-          </label>
-          <input
-            id="filter-from"
-            type="date"
-            value={filters.from}
-            onChange={(e) => updateFilter('from', e.target.value)}
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-          />
-        </div>
-        <div>
-          <label htmlFor="filter-to" className="mb-1 block text-sm text-slate-600">
-            Até
-          </label>
-          <input
-            id="filter-to"
-            type="date"
-            value={filters.to}
-            onChange={(e) => updateFilter('to', e.target.value)}
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-          />
-        </div>
-        <div>
-          <label htmlFor="filter-kind" className="mb-1 block text-sm text-slate-600">
-            Tipo
-          </label>
-          <select
-            id="filter-kind"
-            value={filters.kind}
-            onChange={(e) => updateFilter('kind', e.target.value)}
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-          >
-            <option value="">Todos</option>
-            <option value="income">Receitas</option>
-            <option value="expense">Despesas</option>
-          </select>
-        </div>
-        <div>
-          <label htmlFor="filter-category" className="mb-1 block text-sm text-slate-600">
-            Categoria
-          </label>
-          <select
-            id="filter-category"
-            value={filters.categoryId}
-            onChange={(e) => updateFilter('categoryId', e.target.value)}
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-          >
-            <option value="">Todas</option>
-            {filteredCategories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label htmlFor="filter-account" className="mb-1 block text-sm text-slate-600">
-            Conta
-          </label>
-          <select
-            id="filter-account"
-            value={filters.accountId}
-            onChange={(e) => updateFilter('accountId', e.target.value)}
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-          >
-            <option value="">Todas</option>
-            {(accounts ?? []).map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="sm:col-span-2 lg:col-span-5">
-          <button
-            type="button"
-            onClick={clearFilters}
-            className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
-          >
+      {/* Uma linha so, como no design. Os selects se nomeiam pela propria opcao
+          padrao ("Todos os tipos"), entao o rotulo visivel fica em sr-only. */}
+      <div className={`${card} mb-5 flex flex-wrap items-center gap-3 p-4`}>
+        <DateRangeField
+          from={filters.from}
+          to={filters.to}
+          onChange={({ from, to }) => setFilters((f) => ({ ...f, from, to }))}
+        />
+
+        <label htmlFor="filter-kind" className="sr-only">
+          Tipo
+        </label>
+        <select
+          id="filter-kind"
+          value={filters.kind}
+          onChange={(e) => updateFilter('kind', e.target.value)}
+          className={inputSm}
+        >
+          <option value="">Todos os tipos</option>
+          <option value="income">Receitas</option>
+          <option value="expense">Despesas</option>
+        </select>
+
+        <label htmlFor="filter-category" className="sr-only">
+          Categoria
+        </label>
+        <select
+          id="filter-category"
+          value={filters.categoryId}
+          onChange={(e) => updateFilter('categoryId', e.target.value)}
+          className={inputSm}
+        >
+          <option value="">Todas as categorias</option>
+          {filteredCategories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+
+        <label htmlFor="filter-account" className="sr-only">
+          Conta
+        </label>
+        <select
+          id="filter-account"
+          value={filters.accountId}
+          onChange={(e) => updateFilter('accountId', e.target.value)}
+          className={inputSm}
+        >
+          <option value="">Todas as contas</option>
+          {(accounts ?? []).map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name}
+            </option>
+          ))}
+        </select>
+
+        {dirty && (
+          <button type="button" onClick={() => setFilters(DEFAULT_FILTERS)} className={btnLink}>
             Limpar filtros
           </button>
-        </div>
+        )}
       </div>
 
-      <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <section className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard
           label="Receitas"
           valueCents={summary?.incomeCents ?? 0}
+          tone="jade"
           hint={hintPeriodoCompleto}
           loading={totalsLoading}
         />
         <StatCard
           label="Despesas"
           valueCents={summary?.expenseCents ?? 0}
+          tone="vinho"
           hint={hintPeriodoCompleto}
           loading={totalsLoading}
         />
         <StatCard
           label="Resultado"
           valueCents={summary?.netCents ?? 0}
+          tone="auto"
           hint={hintPeriodoCompleto}
           loading={totalsLoading}
         />
-      </div>
+      </section>
 
-      {txLoading ? (
-        <SkeletonTable rows={8} />
-      ) : txError ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-rose-600 shadow-sm">
-          Não foi possível carregar os lançamentos: {txError.message}
-        </div>
-      ) : (txData?.items ?? []).length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-xl border border-slate-200 bg-white p-10 text-center shadow-sm">
-          <p className="text-slate-500">Nenhum lançamento encontrado para os filtros selecionados.</p>
-          <button
-            type="button"
-            onClick={openNew}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-800"
-          >
-            Novo lançamento
-          </button>
-        </div>
+      {txError ? (
+        <ErrorNote>Não foi possível carregar os lançamentos: {txError.message}</ErrorNote>
       ) : (
-        <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="w-full text-sm">
-            <thead>
-              {table.getHeaderGroups().map((headerGroup) => (
-                <tr key={headerGroup.id} className="border-b border-slate-200">
-                  {headerGroup.headers.map((header) => (
-                    <th key={header.id} className="px-4 py-3 text-left">
-                      {flexRender(header.column.columnDef.header, header.getContext())}
-                    </th>
-                  ))}
-                </tr>
-              ))}
-            </thead>
-            <tbody>
-              {table.getRowModel().rows.map((row) => (
-                <tr key={row.id} className="border-b border-slate-100 last:border-0">
-                  {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="px-4 py-3">
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3 text-sm text-slate-500">
-            <span>
-              Mostrando {startIdx}-{endIdx} de {total}
-            </span>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page <= 1}
-                className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:opacity-40"
-              >
-                Anterior
-              </button>
-              <button
-                type="button"
-                onClick={() => setPage((p) => p + 1)}
-                disabled={page * PAGE_SIZE >= total}
-                className="rounded-lg border border-slate-200 px-3 py-1.5 disabled:opacity-40"
-              >
-                Próximo
-              </button>
-            </div>
-          </div>
+        <div className={`${card} overflow-hidden`}>
+          {txLoading ? (
+            <SkeletonRows rows={8} cols={5} />
+          ) : (txData?.items ?? []).length === 0 ? (
+            <EmptyState
+              title="Nenhum lançamento encontrado"
+              hint={
+                dirty
+                  ? 'Nenhum lançamento bate com esses filtros. Limpe os filtros ou registre um novo.'
+                  : 'Comece registrando a primeira entrada ou saída.'
+              }
+              action={
+                <button type="button" onClick={openNew} className={btnPrimary}>
+                  Novo lançamento
+                </button>
+              }
+            />
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    {table.getHeaderGroups().map((headerGroup) => (
+                      <tr key={headerGroup.id}>
+                        {headerGroup.headers.map((header) => (
+                          <th key={header.id} className={th}>
+                            {flexRender(header.column.columnDef.header, header.getContext())}
+                          </th>
+                        ))}
+                      </tr>
+                    ))}
+                  </thead>
+                  <tbody>
+                    {table.getRowModel().rows.map((row) => (
+                      <tr
+                        key={row.id}
+                        className="border-t border-line transition-colors hover:bg-surface-2"
+                      >
+                        {row.getVisibleCells().map((cell) => (
+                          <td key={cell.id} className="px-5 py-3.5 text-[13.5px]">
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex items-center justify-between gap-4 border-t border-line bg-surface-2 px-5 py-3.5 text-[12.5px] text-ink-3">
+                <span>
+                  <span className="money">
+                    {startIdx}–{endIdx}
+                  </span>{' '}
+                  de <span className="money">{total}</span>
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page <= 1}
+                    className={`${btnGhost} px-3.5 py-1.5 text-[12.5px]`}
+                  >
+                    Anterior
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPage((p) => p + 1)}
+                    disabled={page * PAGE_SIZE >= total}
+                    className={`${btnGhost} px-3.5 py-1.5 text-[12.5px]`}
+                  >
+                    Próximo
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -364,9 +393,10 @@ export default function Lancamentos() {
         editing={editing}
         categories={categories ?? []}
         accounts={accounts ?? []}
-        onClose={closeModal}
+        onClose={() => setModalOpen(false)}
         onSaved={handleSaved}
       />
+      <ConfirmDialog request={confirmRequest} onClose={() => setConfirmRequest(null)} />
     </div>
   )
 }

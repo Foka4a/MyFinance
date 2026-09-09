@@ -1,1 +1,321 @@
 @import "tailwindcss";
+@import "react-day-picker/style.css";
+
+/* Sistema visual do MyFinance — tema escuro.
+   Cor: fundo quase preto com um vies azul (hue 258), superficies que sobem em
+   claridade em vez de ganhar sombra. Lilas e a marca, verde/coral sao
+   semanticos (entrada/saida) e nunca decorativos.
+   Tipo: IBM Plex Sans no texto e IBM Plex Mono no dinheiro — a troca de familia
+   e o que separa numero de prosa (ver .money mais abaixo). */
+@theme {
+  /* Superficies: paper e o fundo da pagina, surface o card, surface-2 o que
+     sobe um degrau (hover, cabecalho de tabela, campo dentro de card). */
+  --color-paper: oklch(0.16 0.011 258);
+  --color-surface: oklch(0.205 0.013 258);
+  --color-surface-2: oklch(0.245 0.014 258);
+
+  --color-ink: oklch(0.97 0.004 258);
+  --color-ink-2: oklch(0.71 0.012 258);
+  --color-ink-3: oklch(0.56 0.012 258);
+
+  --color-line: oklch(0.3 0.015 258);
+  --color-line-soft: oklch(0.265 0.014 258);
+
+  --color-azul: oklch(0.72 0.15 275);
+  --color-azul-deep: oklch(0.79 0.14 275);
+  --color-azul-soft: oklch(0.3 0.05 275);
+  --color-azul-lite: oklch(0.82 0.13 275);
+
+  /* No escuro o acento e claro, entao texto sobre ele tem que ser escuro.
+     text-white em cima de azul aqui reprovaria em contraste. */
+  --color-on-accent: oklch(0.15 0.02 275);
+
+  --color-jade: oklch(0.78 0.15 158);
+  --color-jade-soft: oklch(0.3 0.06 158);
+
+  --color-vinho: oklch(0.71 0.17 22);
+  --color-vinho-soft: oklch(0.3 0.06 22);
+
+  --color-ouro: oklch(0.78 0.14 75);
+  --color-ouro-soft: oklch(0.3 0.06 75);
+
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --radius-card: 14px;
+
+  /* No escuro sombra quase nao aparece: quem separa card do fundo e a borda.
+     Sombra fica so no modal, que precisa flutuar sobre o resto. */
+  --shadow-card: none;
+  --shadow-float: 0 24px 60px rgb(0 0 0 / 0.6);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    /* Um valor so, e date pickers, selects, scrollbars e autofill nativos ja
+       nascem escuros. Substitui um monte de CSS que seria escrito na mao. */
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-azul);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: var(--color-azul-soft);
+    color: var(--color-ink);
+  }
+}
+
+/* ---- Dinheiro -------------------------------------------------------- */
+/* Plex Mono: colunas de valor alinham sozinhas e o numero ganha peso de
+   extrato impresso, sem depender de eixo variavel. */
+.money {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.01em;
+}
+
+.money-hero {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.03em;
+}
+
+/* ---- Campos de data -------------------------------------------------- */
+/* O calendario e o nativo (color-scheme: dark ja deixa o popup escuro). Aqui so
+   alinhamos o campo com o resto: numero em Plex Mono e o icone com o peso de um
+   ink-3, acendendo no hover em vez de brilhar branco o tempo todo. */
+input[type='date'] {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+input[type='date']::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.45;
+  transition: opacity 150ms;
+}
+
+input[type='date']:hover::-webkit-calendar-picker-indicator,
+input[type='date']:focus::-webkit-calendar-picker-indicator {
+  opacity: 1;
+}
+
+/* ---- Listas de selecao ------------------------------------------------ */
+/* appearance: base-select (Chrome 135+) tira o select da mao do sistema e deixa
+   a lista aberta ser estilizada como qualquer elemento. Onde nao houver suporte
+   a declaracao e ignorada e volta o select nativo — que ja nasce escuro pelo
+   color-scheme, entao nao ha tela quebrada em navegador antigo. */
+select,
+::picker(select) {
+  appearance: base-select;
+}
+
+::picker(select) {
+  margin-top: 6px;
+  padding: 4px;
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-float);
+}
+
+option {
+  padding: 7px 9px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--color-ink);
+}
+
+option:hover,
+option:focus {
+  background: var(--color-surface-2);
+  outline: none;
+}
+
+option:checked {
+  color: var(--color-azul);
+  font-weight: 600;
+}
+
+/* O visto do item ativo entra com a cor do acento em vez do preto do sistema. */
+option::checkmark {
+  color: var(--color-azul);
+}
+
+option:disabled {
+  color: var(--color-ink-3);
+}
+
+select::picker-icon {
+  color: var(--color-ink-3);
+  transition: rotate 150ms, color 150ms;
+}
+
+select:hover::picker-icon {
+  color: var(--color-ink-2);
+}
+
+select:open::picker-icon {
+  rotate: 180deg;
+}
+
+/* ---- Calendario (react-day-picker) ----------------------------------- */
+/* A lib traz so o esqueleto; a pele vem dos mesmos tokens do resto. Dia em
+   Plex Mono como todo numero do app, selecao no azul da marca. */
+.rdp-root {
+  --rdp-accent-color: var(--color-azul);
+  --rdp-accent-background-color: var(--color-azul-soft);
+  --rdp-range_middle-color: var(--color-ink);
+  --rdp-range_start-color: var(--color-on-accent);
+  --rdp-range_end-color: var(--color-on-accent);
+  --rdp-today-color: var(--color-azul-lite);
+  --rdp-day-height: 36px;
+  --rdp-day-width: 36px;
+  --rdp-day_button-height: 34px;
+  --rdp-day_button-width: 34px;
+  --rdp-day_button-border-radius: 9px;
+  --rdp-selected-border: none;
+  --rdp-nav_button-height: 1.75rem;
+  --rdp-nav_button-width: 1.75rem;
+  --rdp-months-gap: 1.25rem;
+  --rdp-font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--color-ink);
+}
+
+.rdp-month_caption {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.rdp-weekday {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  color: var(--color-ink-3);
+  text-transform: capitalize;
+}
+
+.rdp-day_button:hover:not([disabled]) {
+  background-color: var(--color-surface-2);
+}
+
+.rdp-button_next:hover,
+.rdp-button_previous:hover {
+  background-color: var(--color-surface-2);
+  border-radius: 8px;
+}
+
+.rdp-selected .rdp-day_button {
+  font-weight: 600;
+}
+
+/* Faixa do topo das paginas de resumo: superficie que clareia na diagonal,
+   pra o numero principal nao ficar sobre o mesmo cinza de todos os cards. */
+.hero-band {
+  background-image: linear-gradient(160deg, var(--color-surface-2), var(--color-surface) 60%);
+}
+
+/* ---- Movimento ------------------------------------------------------- */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+
+.rise {
+  animation: rise 0.32s cubic-bezier(0.2, 0.8, 0.25, 1) both;
+}
+
+/* No escuro o brilho do esqueleto e uma clareada, nao um branco: branco puro
+   pulsando sobre fundo escuro vira estroboscopio. */
+.skeleton {
+  background-color: var(--color-surface-2);
+  background-image: linear-gradient(
+    100deg,
+    transparent 25%,
+    rgb(255 255 255 / 0.07) 45%,
+    transparent 65%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: shimmer 1.5s linear infinite;
+}
+
+/* ---- Modais ---------------------------------------------------------- */
+/* <dialog> nativo faz foco, ESC e inerte de graca. Aqui so entra e sai com
+   transicao — allow-discrete cobre a saida sem JS. */
+dialog {
+  margin: auto;
+  opacity: 0;
+  transform: translateY(10px) scale(0.985);
+  transition:
+    opacity 0.22s ease-out,
+    transform 0.22s cubic-bezier(0.2, 0.8, 0.25, 1),
+    overlay 0.22s allow-discrete,
+    display 0.22s allow-discrete;
+}
+
+dialog[open] {
+  opacity: 1;
+  transform: none;
+}
+
+@starting-style {
+  dialog[open] {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+}
+
+dialog::backdrop {
+  background-color: oklch(0.1 0.01 258 / 0.72);
+  backdrop-filter: blur(3px);
+  opacity: 0;
+  transition:
+    opacity 0.22s ease-out,
+    overlay 0.22s allow-discrete,
+    display 0.22s allow-discrete;
+}
+
+dialog[open]::backdrop {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after,
+  ::backdrop {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -10,6 +10,7 @@ import {
 import { Line } from 'react-chartjs-2'
 import { formatBRL } from '../lib/format.js'
 import { formatBRLShort, formatPeriodLabel } from '../lib/chartFormat.js'
+import { C, axisX, axisY } from '../lib/chartTheme.js'
 
 ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Filler, Tooltip)
 
@@ -22,17 +23,22 @@ export default function LinhaFluxo({ items, granularity }) {
           {
             label: 'Saldo acumulado',
             data: items.map((i) => i.cumulativeCents / 100),
-            borderColor: '#0f172a',
-            backgroundColor: 'rgba(15, 23, 42, 0.08)',
-            fill: true,
+            borderColor: C.azul,
+            backgroundColor: C.azulFill,
+            borderWidth: 2,
+            fill: 'origin',
             tension: 0.3,
-            pointRadius: 2,
+            // Um ponto so nao desenha linha: mostra a bolinha pra nao ficar vazio.
+            pointRadius: items.length === 1 ? 4 : 0,
             pointHoverRadius: 5,
-            pointBackgroundColor: '#0f172a',
+            pointHoverBorderWidth: 2,
+            pointHoverBorderColor: C.surface,
+            pointHoverBackgroundColor: C.azul,
           },
         ],
       }}
       options={{
+        interaction: { mode: 'index', intersect: false },
         plugins: {
           tooltip: {
             callbacks: {
@@ -41,9 +47,8 @@ export default function LinhaFluxo({ items, granularity }) {
           },
         },
         scales: {
-          y: {
-            ticks: { callback: (value) => formatBRLShort(value * 100) },
-          },
+          x: axisX,
+          y: axisY((value) => formatBRLShort(value * 100)),
         },
       }}
     />

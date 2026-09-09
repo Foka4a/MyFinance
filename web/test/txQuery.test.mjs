@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { buildTransactionsQuery, monthRange, centsToInputStr } from '../src/lib/txQuery.js'
+import { buildTransactionsQuery, monthRange } from '../src/lib/txQuery.js'
 
 // buildTransactionsQuery
 assert.equal(
@@ -21,9 +21,5 @@ const { from, to } = monthRange(new Date(2026, 8, 4)) // 4 Sep 2026
 assert.equal(from, '2026-09-01')
 assert.equal(to, '2026-09-30')
 
-// centsToInputStr
-assert.equal(centsToInputStr(123456), '1234,56')
-assert.equal(centsToInputStr(0), '0,00')
-assert.equal(centsToInputStr(null), '')
 
 console.log('txQuery.test.mjs: all assertions passed')

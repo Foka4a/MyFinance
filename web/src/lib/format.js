@@ -28,6 +28,22 @@ export function parseBRLToCents(str) {
   return Math.round(value * 100)
 }
 
+const brlPlain = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+// Mascara dos campos de valor: so os digitos contam e os centavos entram da
+// direita pra esquerda ("15000" vira "1.500,00"). O que sai daqui volta certo
+// pelo parseBRLToCents, entao os formularios podem guardar a string mascarada.
+export function maskBRL(str) {
+  const digits = String(str ?? '').replace(/\D/g, '').slice(0, 15)
+  if (!digits) return ''
+  return brlPlain.format(Number(digits) / 100)
+}
+
+// Valor em centavos -> string do campo, na mesma grafia da mascara.
+export function centsToInputStr(cents) {
+  return cents == null ? '' : maskBRL(String(cents))
+}
+
 export function formatPct(n) {
   if (n == null) return '—'
   const sign = n >= 0 ? '+' : '-'

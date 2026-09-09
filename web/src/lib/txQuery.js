@@ -28,8 +28,3 @@ export function buildTransactionsQuery(filters, sort, page, pageSize) {
   params.set('pageSize', String(pageSize))
   return params.toString()
 }
-
-export function centsToInputStr(cents) {
-  if (cents == null) return ''
-  return (cents / 100).toFixed(2).replace('.', ',')
-}

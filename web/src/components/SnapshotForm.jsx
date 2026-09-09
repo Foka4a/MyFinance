@@ -1,6 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { get, post } from '../lib/api.js'
-import { formatBRL, parseBRLToCents } from '../lib/format.js'
+import { formatBRL, maskBRL, parseBRLToCents } from '../lib/format.js'
+import { DateField } from './DateField.jsx'
+import Modal from './Modal.jsx'
+import { ErrorNote, Field, btnGhost, btnPrimary, input } from './ui.jsx'
 
 function todayISO() {
   const d = new Date()
@@ -8,20 +11,12 @@ function todayISO() {
 }
 
 export default function SnapshotForm({ open, accounts, defaultAccountId, onClose, onSaved }) {
-  const dialogRef = useRef(null)
   const [accountId, setAccountId] = useState('')
   const [date, setDate] = useState('')
   const [amount, setAmount] = useState('')
   const [error, setError] = useState(null)
   const [saving, setSaving] = useState(false)
   const [existing, setExisting] = useState(null)
-
-  useEffect(() => {
-    const dlg = dialogRef.current
-    if (!dlg) return
-    if (open && !dlg.open) dlg.showModal()
-    if (!open && dlg.open) dlg.close()
-  }, [open])
 
   useEffect(() => {
     if (!open) return
@@ -78,31 +73,21 @@ export default function SnapshotForm({ open, accounts, defaultAccountId, onClose
   }
 
   return (
-    <dialog
-      ref={dialogRef}
+    <Modal
+      open={open}
       onClose={onClose}
-      aria-labelledby="snapshot-form-title"
-      className="w-full max-w-md rounded-xl border border-slate-200 p-0 shadow-lg backdrop:bg-slate-900/40"
+      size="md"
+      title="Registrar valor"
+      description="Quanto a conta vale nesta data. Um valor já registrado na mesma data é substituído."
     >
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4 p-6">
-        <h2 id="snapshot-form-title" className="text-lg font-semibold text-slate-900">
-          Registrar valor
-        </h2>
-
-        <p className="text-xs text-slate-500">
-          Registrar um valor para uma conta que já tem valor na mesma data substitui o valor anterior.
-        </p>
-
-        <div>
-          <label htmlFor="snapshot-account" className="mb-1 block text-sm text-slate-600">
-            Conta de investimento
-          </label>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4 px-6 py-5">
+        <Field label="Conta de investimento" htmlFor="snapshot-account">
           <select
             id="snapshot-account"
             required
             value={accountId}
             onChange={(e) => setAccountId(e.target.value)}
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+            className={input}
           >
             {accounts.map((a) => (
               <option key={a.id} value={a.id}>
@@ -110,26 +95,13 @@ export default function SnapshotForm({ open, accounts, defaultAccountId, onClose
               </option>
             ))}
           </select>
-        </div>
+        </Field>
 
-        <div>
-          <label htmlFor="snapshot-date" className="mb-1 block text-sm text-slate-600">
-            Data
-          </label>
-          <input
-            id="snapshot-date"
-            type="date"
-            required
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-          />
-        </div>
+        <Field label="Data" htmlFor="snapshot-date">
+          <DateField id="snapshot-date" value={date} onChange={setDate} />
+        </Field>
 
-        <div>
-          <label htmlFor="snapshot-amount" className="mb-1 block text-sm text-slate-600">
-            Valor
-          </label>
+        <Field label="Valor" htmlFor="snapshot-amount">
           <input
             id="snapshot-amount"
             type="text"
@@ -137,41 +109,28 @@ export default function SnapshotForm({ open, accounts, defaultAccountId, onClose
             placeholder="0,00"
             required
             value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+            onChange={(e) => setAmount(maskBRL(e.target.value))}
+            className={`${input} money`}
           />
-        </div>
+        </Field>
 
         {existing && (
-          <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700" role="alert">
-            Já existe um valor registrado nessa data ({formatBRL(existing.balanceCents)}). Salvar vai
-            substituí-lo.
+          <p role="status" className="rounded-lg bg-ouro-soft px-3 py-2.5 text-sm text-ouro">
+            Essa data já tem {formatBRL(existing.balanceCents)} registrado. Salvar substitui esse valor.
           </p>
         )}
 
-        {error && (
-          <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-600" role="alert">
-            {error}
-          </p>
-        )}
+        {error && <ErrorNote>{error}</ErrorNote>}
 
-        <div className="flex justify-end gap-2 pt-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
-          >
+        <div className="flex justify-end gap-2 pt-1">
+          <button type="button" onClick={onClose} className={btnGhost}>
             Cancelar
           </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-800 disabled:opacity-50"
-          >
-            {saving ? 'Salvando...' : 'Salvar'}
+          <button type="submit" disabled={saving} className={btnPrimary}>
+            {saving ? 'Salvando...' : 'Registrar valor'}
           </button>
         </div>
       </form>
-    </dialog>
+    </Modal>
   )
 }

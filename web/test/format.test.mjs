@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { formatBRL, formatDate, parseBRLToCents, formatPct } from '../src/lib/format.js'
+import { formatBRL, formatDate, parseBRLToCents, formatPct, maskBRL, centsToInputStr } from '../src/lib/format.js'
 
 // formatBRL
 assert.equal(formatBRL(1234), 'R$ 12,34')
@@ -17,6 +17,16 @@ assert.equal(parseBRLToCents('12,3'), 1230)
 assert.equal(parseBRLToCents(''), null)
 assert.equal(parseBRLToCents('R$ 12,34'), 1234)
 assert.equal(parseBRLToCents('R$ 1.000,00'), 100000)
+
+// maskBRL: digitar so numeros ja sai formatado, e volta inteiro pelo parse
+assert.equal(maskBRL('150'), '1,50')
+assert.equal(maskBRL('15000'), '150,00')
+assert.equal(maskBRL('R$ 1.234,56'), '1.234,56')
+assert.equal(maskBRL(''), '')
+assert.equal(maskBRL('abc'), '')
+assert.equal(parseBRLToCents(maskBRL('1234567')), 1234567)
+assert.equal(centsToInputStr(123456), '1.234,56')
+assert.equal(centsToInputStr(null), '')
 
 // formatPct
 assert.equal(formatPct(12.34), '+12,3%')

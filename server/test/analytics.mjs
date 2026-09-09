@@ -36,7 +36,7 @@ try {
   ).body;
 
   const categories = (await request('GET', '/api/categories')).body;
-  const salario = categories.find((c) => c.name === 'Salario');
+  const salario = categories.find((c) => c.name === 'Salário');
   const moradia = categories.find((c) => c.name === 'Moradia');
   const transporte = categories.find((c) => c.name === 'Transporte');
   assert.ok(salario && moradia && transporte, 'categorias seed esperadas ausentes');
@@ -247,6 +247,18 @@ try {
     // Conta Invest "hoje": snapshot mais recente = 2019-03-10 = 15000
     assert.equal(r.body.availableCents, 114600);
     assert.equal(r.body.balanceCents, 129600);
+  }
+
+  // --- summary: periodo de mes civil compara com o mes civil anterior inteiro ---
+  {
+    const r = await request('GET', '/api/summary?from=2020-02-01&to=2020-02-29');
+    assert.deepEqual(r.body.previous.from, '2020-01-01');
+    assert.deepEqual(r.body.previous.to, '2020-01-31');
+
+    // periodo qualquer continua comparando com a mesma quantidade de dias antes
+    const parcial = await request('GET', '/api/summary?from=2020-02-10&to=2020-02-19');
+    assert.deepEqual(parcial.body.previous.from, '2020-01-31');
+    assert.deepEqual(parcial.body.previous.to, '2020-02-09');
   }
 
   console.log('OK - todos os testes de analytics passaram');

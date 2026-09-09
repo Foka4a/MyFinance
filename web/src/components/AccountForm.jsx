@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { post, put } from '../lib/api.js'
-import { parseBRLToCents } from '../lib/format.js'
-import { centsToInputStr } from '../lib/txQuery.js'
+import { centsToInputStr, maskBRL, parseBRLToCents } from '../lib/format.js'
+import Modal from './Modal.jsx'
+import { ErrorNote, Field, btnGhost, btnPrimary, input } from './ui.jsx'
 
 export const ACCOUNT_TYPES = ['corrente', 'poupanca', 'carteira', 'investimento']
 export const ACCOUNT_TYPE_LABELS = {
@@ -14,17 +15,9 @@ export const ACCOUNT_TYPE_LABELS = {
 const EMPTY = { name: '', type: 'corrente', institution: '', openingBalance: '' }
 
 export default function AccountForm({ open, editing, onClose, onSaved }) {
-  const dialogRef = useRef(null)
   const [form, setForm] = useState(EMPTY)
   const [error, setError] = useState(null)
   const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    const dlg = dialogRef.current
-    if (!dlg) return
-    if (open && !dlg.open) dlg.showModal()
-    if (!open && dlg.open) dlg.close()
-  }, [open])
 
   useEffect(() => {
     if (!open) return
@@ -74,41 +67,27 @@ export default function AccountForm({ open, editing, onClose, onSaved }) {
   }
 
   return (
-    <dialog
-      ref={dialogRef}
-      onClose={onClose}
-      aria-labelledby="account-form-title"
-      className="w-full max-w-lg rounded-xl border border-slate-200 p-0 shadow-lg backdrop:bg-slate-900/40"
-    >
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4 p-6">
-        <h2 id="account-form-title" className="text-lg font-semibold text-slate-900">
-          {editing ? 'Editar conta' : 'Nova conta'}
-        </h2>
-
-        <div>
-          <label htmlFor="account-name" className="mb-1 block text-sm text-slate-600">
-            Nome
-          </label>
+    <Modal open={open} onClose={onClose} title={editing ? 'Editar conta' : 'Nova conta'}>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4 px-6 py-5">
+        <Field label="Nome" htmlFor="account-name">
           <input
             id="account-name"
             type="text"
             required
+            placeholder="Nubank, carteira, reserva..."
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+            className={input}
           />
-        </div>
+        </Field>
 
         <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="account-type" className="mb-1 block text-sm text-slate-600">
-              Tipo
-            </label>
+          <Field label="Tipo" htmlFor="account-type">
             <select
               id="account-type"
               value={form.type}
               onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              className={input}
             >
               {ACCOUNT_TYPES.map((t) => (
                 <option key={t} value={t}>
@@ -116,59 +95,45 @@ export default function AccountForm({ open, editing, onClose, onSaved }) {
                 </option>
               ))}
             </select>
-          </div>
-          <div>
-            <label htmlFor="account-institution" className="mb-1 block text-sm text-slate-600">
-              Instituição (opcional)
-            </label>
+          </Field>
+          <Field label="Instituição" htmlFor="account-institution" hint="Opcional.">
             <input
               id="account-institution"
               type="text"
               value={form.institution}
               onChange={(e) => setForm((f) => ({ ...f, institution: e.target.value }))}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              className={input}
             />
-          </div>
+          </Field>
         </div>
 
-        <div>
-          <label htmlFor="account-opening" className="mb-1 block text-sm text-slate-600">
-            Saldo inicial
-          </label>
+        <Field
+          label="Saldo inicial"
+          htmlFor="account-opening"
+          hint="Quanto havia na conta antes do primeiro lançamento."
+        >
           <input
             id="account-opening"
             type="text"
             inputMode="decimal"
             placeholder="0,00"
             value={form.openingBalance}
-            onChange={(e) => setForm((f) => ({ ...f, openingBalance: e.target.value }))}
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+            onChange={(e) => setForm((f) => ({ ...f, openingBalance: maskBRL(e.target.value) }))}
+            className={`${input} money`}
           />
-        </div>
+        </Field>
 
-        {error && (
-          <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-600" role="alert">
-            {error}
-          </p>
-        )}
+        {error && <ErrorNote>{error}</ErrorNote>}
 
-        <div className="flex justify-end gap-2 pt-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
-          >
+        <div className="flex justify-end gap-2 pt-1">
+          <button type="button" onClick={onClose} className={btnGhost}>
             Cancelar
           </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-800 disabled:opacity-50"
-          >
-            {saving ? 'Salvando...' : 'Salvar'}
+          <button type="submit" disabled={saving} className={btnPrimary}>
+            {saving ? 'Salvando...' : 'Salvar conta'}
           </button>
         </div>
       </form>
-    </dialog>
+    </Modal>
   )
 }

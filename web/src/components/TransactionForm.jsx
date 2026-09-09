@@ -1,7 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { post, put } from '../lib/api.js'
-import { parseBRLToCents } from '../lib/format.js'
-import { centsToInputStr } from '../lib/txQuery.js'
+import { centsToInputStr, maskBRL, parseBRLToCents } from '../lib/format.js'
+import { DateField } from './DateField.jsx'
+import Modal from './Modal.jsx'
+import { ErrorNote, Field, btnGhost, btnPrimary, input } from './ui.jsx'
+
+const LAST_KIND_KEY = 'myfinance:lastKind'
 
 const EMPTY = {
   kind: 'expense',
@@ -13,23 +17,20 @@ const EMPTY = {
   notes: '',
 }
 
+const KINDS = [
+  { value: 'income', label: 'Receita', on: 'bg-jade-soft text-jade' },
+  { value: 'expense', label: 'Despesa', on: 'bg-vinho-soft text-vinho' },
+]
+
 function todayISO() {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 export default function TransactionForm({ open, editing, categories, accounts, onClose, onSaved }) {
-  const dialogRef = useRef(null)
   const [form, setForm] = useState(EMPTY)
   const [error, setError] = useState(null)
   const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    const dlg = dialogRef.current
-    if (!dlg) return
-    if (open && !dlg.open) dlg.showModal()
-    if (!open && dlg.open) dlg.close()
-  }, [open])
 
   useEffect(() => {
     if (!open) return
@@ -45,7 +46,8 @@ export default function TransactionForm({ open, editing, categories, accounts, o
         notes: editing.notes ?? '',
       })
     } else {
-      setForm({ ...EMPTY, date: todayISO() })
+      // Lembra o ultimo tipo usado pra nao empurrar "Despesa" em todo lancamento novo.
+      setForm({ ...EMPTY, kind: localStorage.getItem(LAST_KIND_KEY) ?? EMPTY.kind, date: todayISO() })
     }
   }, [open, editing])
 
@@ -84,6 +86,7 @@ export default function TransactionForm({ open, editing, categories, accounts, o
       } else {
         await post('/transactions', payload)
       }
+      localStorage.setItem(LAST_KIND_KEY, form.kind)
       onSaved()
     } catch (err) {
       setError(err.message)
@@ -95,30 +98,18 @@ export default function TransactionForm({ open, editing, categories, accounts, o
   const filteredCategories = categories.filter((c) => c.kind === form.kind)
 
   return (
-    <dialog
-      ref={dialogRef}
-      onClose={onClose}
-      aria-labelledby="tx-form-title"
-      className="w-full max-w-lg rounded-xl border border-slate-200 p-0 shadow-lg backdrop:bg-slate-900/40"
-    >
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4 p-6">
-        <h2 id="tx-form-title" className="text-lg font-semibold text-slate-900">
-          {editing ? 'Editar lançamento' : 'Novo lançamento'}
-        </h2>
-
-        <div role="group" aria-label="Tipo do lançamento" className="flex gap-2">
-          {[
-            { value: 'income', label: 'Receita' },
-            { value: 'expense', label: 'Despesa' },
-          ].map((opt) => (
+    <Modal open={open} onClose={onClose} title={editing ? 'Editar lançamento' : 'Novo lançamento'}>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4 px-6 py-5">
+        <div
+          role="group"
+          aria-label="Tipo do lançamento"
+          className="flex gap-1 rounded-[11px] border border-line bg-surface-2 p-1"
+        >
+          {KINDS.map((opt) => (
             <label
               key={opt.value}
-              className={`flex-1 cursor-pointer rounded-lg border px-3 py-2 text-center text-sm font-medium transition-colors ${
-                form.kind === opt.value
-                  ? opt.value === 'income'
-                    ? 'border-emerald-600 bg-emerald-50 text-emerald-700'
-                    : 'border-rose-600 bg-rose-50 text-rose-700'
-                  : 'border-slate-200 text-slate-500 hover:bg-slate-50'
+              className={`flex-1 cursor-pointer rounded-lg px-3 py-2.5 text-center text-[13px] font-semibold transition-colors ${
+                form.kind === opt.value ? opt.on : 'text-ink-2 hover:text-ink'
               }`}
             >
               <input
@@ -135,23 +126,14 @@ export default function TransactionForm({ open, editing, categories, accounts, o
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="tx-date" className="mb-1 block text-sm text-slate-600">
-              Data
-            </label>
-            <input
+          <Field label="Data" htmlFor="tx-date">
+            <DateField
               id="tx-date"
-              type="date"
-              required
               value={form.date}
-              onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              onChange={(date) => setForm((f) => ({ ...f, date }))}
             />
-          </div>
-          <div>
-            <label htmlFor="tx-amount" className="mb-1 block text-sm text-slate-600">
-              Valor
-            </label>
+          </Field>
+          <Field label="Valor" htmlFor="tx-amount">
             <input
               id="tx-amount"
               type="text"
@@ -159,36 +141,31 @@ export default function TransactionForm({ open, editing, categories, accounts, o
               placeholder="0,00"
               required
               value={form.amount}
-              onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              onChange={(e) => setForm((f) => ({ ...f, amount: maskBRL(e.target.value) }))}
+              className={`${input} money`}
             />
-          </div>
+          </Field>
         </div>
 
-        <div>
-          <label htmlFor="tx-description" className="mb-1 block text-sm text-slate-600">
-            Descrição
-          </label>
+        <Field label="Descrição" htmlFor="tx-description">
           <input
             id="tx-description"
             type="text"
             required
+            placeholder="Mercado, aluguel, aula particular..."
             value={form.description}
             onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+            className={input}
           />
-        </div>
+        </Field>
 
         <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="tx-category" className="mb-1 block text-sm text-slate-600">
-              Categoria
-            </label>
+          <Field label="Categoria" htmlFor="tx-category">
             <select
               id="tx-category"
               value={form.categoryId}
               onChange={(e) => setForm((f) => ({ ...f, categoryId: e.target.value }))}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              className={input}
             >
               <option value="">Sem categoria</option>
               {filteredCategories.map((c) => (
@@ -197,17 +174,14 @@ export default function TransactionForm({ open, editing, categories, accounts, o
                 </option>
               ))}
             </select>
-          </div>
-          <div>
-            <label htmlFor="tx-account" className="mb-1 block text-sm text-slate-600">
-              Conta
-            </label>
+          </Field>
+          <Field label="Conta" htmlFor="tx-account">
             <select
               id="tx-account"
               required
               value={form.accountId}
               onChange={(e) => setForm((f) => ({ ...f, accountId: e.target.value }))}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              className={input}
             >
               <option value="" disabled>
                 Selecione
@@ -218,45 +192,30 @@ export default function TransactionForm({ open, editing, categories, accounts, o
                 </option>
               ))}
             </select>
-          </div>
+          </Field>
         </div>
 
-        <div>
-          <label htmlFor="tx-notes" className="mb-1 block text-sm text-slate-600">
-            Observação
-          </label>
+        <Field label="Observação" htmlFor="tx-notes" hint="Opcional.">
           <textarea
             id="tx-notes"
             rows={2}
             value={form.notes}
             onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+            className={`${input} resize-y`}
           />
-        </div>
+        </Field>
 
-        {error && (
-          <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-600" role="alert">
-            {error}
-          </p>
-        )}
+        {error && <ErrorNote>{error}</ErrorNote>}
 
-        <div className="flex justify-end gap-2 pt-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
-          >
+        <div className="flex justify-end gap-2 pt-1">
+          <button type="button" onClick={onClose} className={btnGhost}>
             Cancelar
           </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-800 disabled:opacity-50"
-          >
-            {saving ? 'Salvando...' : 'Salvar'}
+          <button type="submit" disabled={saving} className={btnPrimary}>
+            {saving ? 'Salvando...' : 'Salvar lançamento'}
           </button>
         </div>
       </form>
-    </dialog>
+    </Modal>
   )
 }

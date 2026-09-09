@@ -72,6 +72,12 @@ export function defaultPeriod() {
 }
 
 export function previousPeriod(from, to) {
+  // Mes civil inteiro compara com o mes civil anterior inteiro; qualquer outro
+  // periodo compara com a mesma quantidade de dias imediatamente antes.
+  if (from.endsWith('-01') && monthOf(from) === monthOf(to) && to === lastDayOfMonth(monthOf(to))) {
+    const prevMonth = monthOf(addDays(from, -1));
+    return { from: `${prevMonth}-01`, to: lastDayOfMonth(prevMonth) };
+  }
   const len = diffDaysInclusive(from, to);
   const prevTo = addDays(from, -1);
   const prevFrom = addDays(prevTo, -(len - 1));
