@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { post, put } from '../lib/api.js'
-import { centsToInputStr, maskBRL, parseBRLToCents } from '../lib/format.js'
+import { centsToInputStr, maskBRL, parseBRLToCents, todayISO } from '../lib/format.js'
 import { DateField } from './DateField.jsx'
 import Modal from './Modal.jsx'
 import { ErrorNote, Field, btnGhost, btnPrimary, input } from './ui.jsx'
 
 const LAST_KIND_KEY = 'myfinance:lastKind'
+const LAST_ACCOUNT_KEY = 'myfinance:lastAccount'
 
 const EMPTY = {
   kind: 'expense',
@@ -21,11 +22,6 @@ const KINDS = [
   { value: 'income', label: 'Receita', on: 'bg-jade-soft text-jade' },
   { value: 'expense', label: 'Despesa', on: 'bg-vinho-soft text-vinho' },
 ]
-
-function todayISO() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
 
 export default function TransactionForm({ open, editing, categories, accounts, onClose, onSaved }) {
   const [form, setForm] = useState(EMPTY)
@@ -87,6 +83,7 @@ export default function TransactionForm({ open, editing, categories, accounts, o
         await post('/transactions', payload)
       }
       localStorage.setItem(LAST_KIND_KEY, form.kind)
+      localStorage.setItem(LAST_ACCOUNT_KEY, form.accountId)
       onSaved()
     } catch (err) {
       setError(err.message)

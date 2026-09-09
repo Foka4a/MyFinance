@@ -1,12 +1,15 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useApi } from '../hooks/useApi.js'
-import { formatDate } from '../lib/format.js'
+import { formatDate, todayISO } from '../lib/format.js'
 import { monthRange, toISODate } from '../lib/txQuery.js'
 import { DateRangeField } from '../components/DateField.jsx'
 import StatCard from '../components/StatCard.jsx'
 import DonutGastos from '../components/DonutGastos.jsx'
-import { SkeletonList } from '../components/Skeleton.jsx'
+import LimitesMes from '../components/LimitesMes.jsx'
+import QuickAdd from '../components/QuickAdd.jsx'
+import SaldoSparkline from '../components/SaldoSparkline.jsx'
+import Skeleton, { SkeletonList } from '../components/Skeleton.jsx'
 import { Dot, EmptyState, ErrorNote, Money, PageHeader, Segmented, btnLink, card } from '../components/ui.jsx'
 
 function weekRange(now = new Date()) {
@@ -32,6 +35,7 @@ const PRESETS = [
 
 export default function Dashboard() {
   const [period, setPeriod] = useState(MONTH)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   const preset =
     period.from === WEEK.from && period.to === WEEK.to
@@ -41,13 +45,40 @@ export default function Dashboard() {
         : null
 
   const summaryPath = `/summary?from=${period.from}&to=${period.to}`
-  const { data: summary, loading: summaryLoading, error: summaryError } = useApi(summaryPath)
+  const { data: summary, loading: summaryLoading, error: summaryError, reload: reloadSummary } = useApi(summaryPath)
 
   const categoryPath = `/summary/by-category?from=${period.from}&to=${period.to}&kind=expense`
-  const { data: categories, loading: categoriesLoading, error: categoriesError } = useApi(categoryPath)
+  const {
+    data: categories,
+    loading: categoriesLoading,
+    error: categoriesError,
+    reload: reloadCategories,
+  } = useApi(categoryPath)
 
   const txPath = `/transactions?from=${period.from}&to=${period.to}&pageSize=5&sort=date&order=desc`
-  const { data: txData, loading: txLoading, error: txError } = useApi(txPath)
+  const { data: txData, loading: txLoading, error: txError, reload: reloadTx } = useApi(txPath)
+
+  const { data: allCategories } = useApi('/categories')
+  const { data: accounts } = useApi('/accounts')
+
+  const cashflowPath = `/cashflow?from=${period.from}&to=${period.to}&granularity=day`
+  const { data: cashflow, loading: cashflowLoading, error: cashflowError } = useApi(cashflowPath)
+  const saldoItems = cashflow?.items ?? []
+  // O numero do hero e sempre o saldo de hoje; a linha termina no acumulado do
+  // dia `period.to`. Em periodo passado os dois divergem, entao o grafico so
+  // aparece quando a janela inclui hoje.
+  // ponytail: dentro da janela ainda pode sobrar divergencia menor quando ha
+  // snapshot de investimento no meio (o cashflow nao ve snapshot) — aceita.
+  const includesToday = period.to >= todayISO()
+  // ponytail: erro (intervalo > 400 dias) ou poucos pontos -> sem grafico, hero segue igual.
+  const showSaldoChart = includesToday && !cashflowError && saldoItems.length >= 2
+
+  function reloadDashboard() {
+    reloadSummary()
+    reloadCategories()
+    reloadTx()
+    setRefreshKey((k) => k + 1)
+  }
 
   const comparacao = summary
     ? `Variação comparada com ${formatDate(summary.previous.from)} – ${formatDate(summary.previous.to)}.`
@@ -68,54 +99,70 @@ export default function Dashboard() {
       </PageHeader>
 
       {summaryError ? (
-        <ErrorNote className="mb-8">Não foi possível carregar o resumo: {summaryError.message}</ErrorNote>
+        <ErrorNote className="mb-6">Não foi possível carregar o resumo: {summaryError.message}</ErrorNote>
       ) : (
-        <>
-          <section className="mb-6">
-            <StatCard
-              variant="hero"
-              label="Saldo atual · todas as contas"
-              valueCents={summary?.balanceCents}
-              variationPct={summary?.variation?.netPct}
-              hint={comparacao}
-              tone="auto"
-              loading={summaryLoading}
-            />
-          </section>
+        <section className="mb-6">
+          <StatCard
+            variant="hero"
+            label="Saldo atual · todas as contas"
+            valueCents={summary?.balanceCents}
+            variationPct={summary?.variation?.netPct}
+            hint={comparacao}
+            tone="auto"
+            loading={summaryLoading}
+            chart={
+              includesToday && cashflowLoading ? (
+                <Skeleton className="h-[90px] w-full" />
+              ) : showSaldoChart ? (
+                <SaldoSparkline items={saldoItems} pct={summary?.variation?.netPct} />
+              ) : null
+            }
+          />
+        </section>
+      )}
 
-          <section className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard
-              label="Receitas"
-              valueCents={summary?.incomeCents}
-              variationPct={summary?.variation?.incomePct}
-              dot={SERIES.jade}
-              loading={summaryLoading}
-            />
-            <StatCard
-              label="Despesas"
-              valueCents={summary?.expenseCents}
-              variationPct={summary?.variation?.expensePct}
-              dot={SERIES.vinho}
-              invertVariationColor
-              loading={summaryLoading}
-            />
-            <StatCard
-              label="Resultado líquido"
-              valueCents={summary?.netCents}
-              variationPct={summary?.variation?.netPct}
-              dot={SERIES.azul}
-              tone="auto"
-              loading={summaryLoading}
-            />
-            <StatCard
-              label="Disponível"
-              valueCents={summary?.availableCents}
-              dot={SERIES.ouro}
-              hint="fora dos investimentos"
-              loading={summaryLoading}
-            />
-          </section>
-        </>
+      {/* Spec: registro rápido logo abaixo do card de saldo. Fica fora do ramo de
+          erro do resumo pra continuar disponível quando o /summary falha. */}
+      <QuickAdd
+        topExpenseCategories={categories}
+        allCategories={allCategories}
+        accounts={accounts}
+        onSaved={reloadDashboard}
+      />
+
+      {!summaryError && (
+        <section className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            label="Receitas"
+            valueCents={summary?.incomeCents}
+            variationPct={summary?.variation?.incomePct}
+            dot={SERIES.jade}
+            loading={summaryLoading}
+          />
+          <StatCard
+            label="Despesas"
+            valueCents={summary?.expenseCents}
+            variationPct={summary?.variation?.expensePct}
+            dot={SERIES.vinho}
+            invertVariationColor
+            loading={summaryLoading}
+          />
+          <StatCard
+            label="Resultado líquido"
+            valueCents={summary?.netCents}
+            variationPct={summary?.variation?.netPct}
+            dot={SERIES.azul}
+            tone="auto"
+            loading={summaryLoading}
+          />
+          <StatCard
+            label="Disponível"
+            valueCents={summary?.availableCents}
+            dot={SERIES.ouro}
+            hint="fora dos investimentos"
+            loading={summaryLoading}
+          />
+        </section>
       )}
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
@@ -168,6 +215,10 @@ export default function Dashboard() {
             </ul>
           )}
         </section>
+      </div>
+
+      <div className="mt-5">
+        <LimitesMes categories={allCategories} refreshKey={refreshKey} />
       </div>
     </div>
   )

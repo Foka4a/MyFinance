@@ -83,6 +83,7 @@ export default function StatCard({
   emphasis = false,
   variant = 'card',
   invertVariationColor = false,
+  chart,
 }) {
   const hero = variant === 'hero'
   const shown = useCountUp(valueCents, hero && !loading)
@@ -103,16 +104,21 @@ export default function StatCard({
   }
 
   if (hero) {
+    // Com grafico o hero vira duas colunas (spec); sem grafico o wrapper de texto
+    // e um div block comum, entao os usos sem `chart` seguem identicos.
     return (
-      <div className={`${heroCard} rise`}>
-        <p className={eyebrow}>{label}</p>
-        <div className="mt-2.5 flex flex-wrap items-baseline gap-x-3.5 gap-y-2">
-          <span className={`money-hero text-[clamp(2rem,6vw,2.875rem)] font-semibold leading-none ${color}`}>
-            {formatBRL(shown)}
-          </span>
-          <Variation pct={variationPct} invert={invertVariationColor} pill />
+      <div className={`${heroCard} rise ${chart ? 'flex flex-wrap items-center justify-between gap-7' : ''}`}>
+        <div className={chart ? 'min-w-[260px]' : ''}>
+          <p className={eyebrow}>{label}</p>
+          <div className="mt-2.5 flex flex-wrap items-baseline gap-x-3.5 gap-y-2">
+            <span className={`money-hero text-[clamp(2rem,6vw,2.875rem)] font-semibold leading-none ${color}`}>
+              {formatBRL(shown)}
+            </span>
+            <Variation pct={variationPct} invert={invertVariationColor} pill />
+          </div>
+          {hint && <p className="mt-3 text-[13px] text-ink-2">{hint}</p>}
         </div>
-        {hint && <p className="mt-3 text-[13px] text-ink-2">{hint}</p>}
+        {chart && <div className="min-w-[220px] max-w-[420px] flex-1">{chart}</div>}
       </div>
     )
   }

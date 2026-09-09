@@ -6,6 +6,7 @@ import { transactionsRouter } from './routes/transactions.js';
 import { summaryRouter } from './routes/summary.js';
 import { cashflowRouter } from './routes/cashflow.js';
 import { investmentsRouter, networthRouter } from './routes/investments.js';
+import { budgetsRouter } from './routes/budgets.js';
 
 const app = express();
 app.use(express.json());
@@ -21,6 +22,7 @@ app.use('/api/summary', summaryRouter);
 app.use('/api/cashflow', cashflowRouter);
 app.use('/api/investments', investmentsRouter);
 app.use('/api/networth', networthRouter);
+app.use('/api/budgets', budgetsRouter);
 
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
