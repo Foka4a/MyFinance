@@ -30,10 +30,11 @@ export function balanceAtDate(account, date) {
   return account.opening_balance_cents + income - expense;
 }
 
-export function totalBalanceAtDate(date, { excludeInvestment = false } = {}) {
-  const accounts = excludeInvestment
+export function totalBalanceAtDate(date, { excludeInvestment = false, excludeWallet = false } = {}) {
+  const accounts = (excludeInvestment
     ? activeNonInvestmentAccountsStmt.all()
-    : activeAccountsStmt.all();
+    : activeAccountsStmt.all()
+  ).filter((account) => !(excludeWallet && account.type === 'carteira'));
   return accounts.reduce((sum, account) => sum + balanceAtDate(account, date), 0);
 }
 

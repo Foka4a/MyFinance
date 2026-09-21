@@ -224,15 +224,24 @@ try {
   }
 
   // --- networth: usa snapshot mais recente <= fim do periodo, com fallback pra ledger ---
+  // carteira com saldo nao-zero fica fora da serie (gasto previsivel, nao patrimonio)
   {
+    const carteira = await request('POST', '/api/accounts', {
+      name: 'Carteira Networth',
+      type: 'carteira',
+      openingBalanceCents: 7000,
+    });
+    assert.equal(carteira.status, 201);
     const r = await request('GET', '/api/networth?from=2019-01-01&to=2019-03-01');
+    // removida pra nao afetar summary/cashflow abaixo
+    assert.equal((await request('DELETE', `/api/accounts/${carteira.body.id}`)).status, 204);
     assert.equal(r.status, 200);
     assert.deepEqual(
       r.body.map((i) => i.period),
       ['2019-01', '2019-02', '2019-03']
     );
     // jan/2019: nenhum snapshot <= fim do mes -> Conta Invest cai na formula de ledger (0)
-    assert.equal(r.body[0].totalCents, 100600); // carteira 0 + contaA 100600 + invest 0
+    assert.equal(r.body[0].totalCents, 100600); // contaA 100600 + invest 0 (carteira 7000 excluida)
     // fev/2019: snapshot mais recente <= 2019-02-28 e o de 02-15 (9000, apos upsert)
     assert.equal(r.body[1].totalCents, 109600);
     // mar/2019: snapshot mais recente <= 2019-03-31 e o de 03-10 (15000)

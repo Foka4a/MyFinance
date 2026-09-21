@@ -102,7 +102,8 @@ networthRouter.get('/', (req, res) => {
   const items = enumerateMonths(from, to).map((period) => {
     const monthEnd = lastDayOfMonth(period);
     const effectiveDate = monthEnd < today ? monthEnd : today;
-    return { period, totalCents: totalBalanceAtDate(effectiveDate) };
+    // carteira e gasto previsivel, nao patrimonio: fica fora da serie de crescimento
+    return { period, totalCents: totalBalanceAtDate(effectiveDate, { excludeWallet: true }) };
   });
 
   res.json(items);
