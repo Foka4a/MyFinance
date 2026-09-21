@@ -8,3 +8,5 @@ agents/
 server/test/qa-audit.mjs
 server/test/qa-regression.mjs
 graphify-out
+/docs/*
+!/docs/design/

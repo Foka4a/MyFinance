@@ -35,3 +35,8 @@ CREATE TABLE IF NOT EXISTS investment_snapshots (
   balance_cents INTEGER NOT NULL,
   UNIQUE (account_id, date)
 );
+-- ponytail: limite unico por categoria, sem historico por mes; adicionar coluna month quando o limite precisar variar de mes a mes.
+CREATE TABLE IF NOT EXISTS budgets (
+  category_id INTEGER PRIMARY KEY REFERENCES categories(id) ON DELETE CASCADE,
+  limit_cents INTEGER NOT NULL CHECK (limit_cents > 0)
+);

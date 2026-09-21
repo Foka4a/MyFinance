@@ -1,14 +1,9 @@
 import { useEffect, useState } from 'react'
 import { get, post } from '../lib/api.js'
-import { formatBRL, maskBRL, parseBRLToCents } from '../lib/format.js'
+import { formatBRL, maskBRL, parseBRLToCents, todayISO } from '../lib/format.js'
 import { DateField } from './DateField.jsx'
 import Modal from './Modal.jsx'
 import { ErrorNote, Field, btnGhost, btnPrimary, input } from './ui.jsx'
-
-function todayISO() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
 
 export default function SnapshotForm({ open, accounts, defaultAccountId, onClose, onSaved }) {
   const [accountId, setAccountId] = useState('')

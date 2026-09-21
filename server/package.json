@@ -10,7 +10,7 @@
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
     "seed": "node src/seed.js",
-    "test": "node test/smoke.mjs && node test/analytics.mjs"
+    "test": "node test/smoke.mjs && node test/analytics.mjs && node test/budgets.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",
